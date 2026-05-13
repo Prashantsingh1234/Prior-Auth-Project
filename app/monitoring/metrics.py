@@ -134,6 +134,32 @@ PA_CASE_PROCESSING_SECONDS = Histogram(
 )
 
 
+# Cache
+CACHE_HITS_TOTAL = Counter(
+    name="pa_cache_hits_total",
+    documentation="Cache hits by domain",
+    labelnames=["domain"],  # retrieval | llm | embedding | session | clarification
+)
+
+CACHE_MISSES_TOTAL = Counter(
+    name="pa_cache_misses_total",
+    documentation="Cache misses by domain",
+    labelnames=["domain"],
+)
+
+CACHE_ERRORS_TOTAL = Counter(
+    name="pa_cache_errors_total",
+    documentation="Cache operation errors by domain and operation type",
+    labelnames=["domain", "operation"],  # operation: get | set | delete | pattern_delete
+)
+
+CACHE_SET_SIZE_BYTES = Summary(
+    name="pa_cache_set_size_bytes",
+    documentation="Approximate size of values written to cache (serialized bytes)",
+    labelnames=["domain"],
+)
+
+
 class PAMetrics:
     """
     Convenience wrapper giving attribute-style access to all metrics.
@@ -159,6 +185,10 @@ class PAMetrics:
         self.queue_backlog = QUEUE_BACKLOG
         self.pa_cases_active = PA_CASES_ACTIVE
         self.pa_case_processing_seconds = PA_CASE_PROCESSING_SECONDS
+        self.cache_hits_total = CACHE_HITS_TOTAL
+        self.cache_misses_total = CACHE_MISSES_TOTAL
+        self.cache_errors_total = CACHE_ERRORS_TOTAL
+        self.cache_set_size_bytes = CACHE_SET_SIZE_BYTES
 
 
 # Module-level singleton
