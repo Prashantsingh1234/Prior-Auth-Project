@@ -1,0 +1,203 @@
+# ============================================================
+# PA Review Platform — Docker Compose
+# Full local development + integration stack
+#
+# Services:
+#   pa-api       — FastAPI application
+#   mysql        — Primary database
+#   redis        — Cache + session store
+#   rabbitmq     — Async message queue
+#   prometheus   — Metrics collection
+#   grafana      — Metrics visualization
+# ============================================================
+
+version: "3.9"
+
+networks:
+  pa-network:
+    driver: bridge
+    name: pa-platform-net
+
+volumes:
+  mysql_data:
+    name: pa_mysql_data
+  redis_data:
+    name: pa_redis_data
+  rabbitmq_data:
+    name: pa_rabbitmq_data
+  prometheus_data:
+    name: pa_prometheus_data
+  grafana_data:
+    name: pa_grafana_data
+
+# ----------------------------------------------------------
+# Reusable service defaults
+# ----------------------------------------------------------
+x-common-healthcheck: &common-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 40s
+
+x-app-env: &app-env
+  env_file:
+    - .env
+  networks:
+    - pa-network
+
+services:
+
+  # --------------------------------------------------------
+  # FastAPI Application
+  # --------------------------------------------------------
+  pa-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development          # Use 'production' for prod builds
+    image: pa-review-platform:dev
+    container_name: pa-api
+    <<: *app-env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Hot-reload in development
+      - .:/app
+      - /app/.venv                 # Exclude venv from bind mount
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_FORMAT: console
+      DB_HOST: mysql
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      <<: *common-healthcheck
+    restart: unless-stopped
+    labels:
+      - "com.pa-platform.service=api"
+      - "com.pa-platform.version=0.1.0"
+
+  # --------------------------------------------------------
+  # MySQL 8.0 — Primary Database
+  # --------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: pa-mysql
+    networks:
+      - pa-network
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: pa_review_db
+      MYSQL_USER: pa_user
+      MYSQL_PASSWORD: pa_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--innodb-buffer-pool-size=256M"
+      - "--max-connections=200"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "pa_user", "-ppa_password"]
+      <<: *common-healthcheck
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # Redis 7 — Cache + Session Store
+  # --------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: pa-redis
+    networks:
+      - pa-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *common-healthcheck
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # RabbitMQ 3 — Async Message Queue
+  # --------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: pa-rabbitmq
+    networks:
+      - pa-network
+    environment:
+      RABBITMQ_DEFAULT_USER: pauser
+      RABBITMQ_DEFAULT_PASS: papassword
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      <<: *common-healthcheck
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # Prometheus — Metrics Collection
+  # --------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: pa-prometheus
+    networks:
+      - pa-network
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    depends_on:
+      - pa-api
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # Grafana — Metrics Visualization
+  # --------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: pa-grafana
+    networks:
+      - pa-network
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: adminpassword
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_DOMAIN: localhost
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped

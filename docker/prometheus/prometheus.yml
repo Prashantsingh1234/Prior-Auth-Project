@@ -1,0 +1,28 @@
+# ============================================================
+# PA Review Platform — Prometheus Scrape Configuration
+# ============================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "pa-platform"
+    environment: "development"
+
+scrape_configs:
+  # FastAPI application metrics
+  - job_name: "pa-api"
+    static_configs:
+      - targets: ["pa-api:8000"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Redis metrics (if redis_exporter is added later)
+  # - job_name: "redis"
+  #   static_configs:
+  #     - targets: ["redis-exporter:9121"]

@@ -1,0 +1,79 @@
+# ============================================================
+# PA Review Platform — Git Ignore
+# ============================================================
+
+# Secrets & Environment
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.cert
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-wheel-metadata/
+*.whl
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff / Linting
+.ruff_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Database
+*.sqlite3
+*.db
+alembic/versions/*.pyc
+
+# Uploads & Temp
+uploads/
+tmp/
+temp/
+
+# Monitoring
+grafana/data/
+
+# Node (frontend)
+node_modules/
+.next/
+dist/
+
+# Poetry
+poetry.lock

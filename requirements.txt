@@ -1,0 +1,70 @@
+# ============================================================
+# PA Review Platform — Production Dependencies
+# Generated from pyproject.toml (poetry export)
+# Pin versions for reproducible production builds
+# ============================================================
+
+# Web Framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+gunicorn==22.0.0
+
+# Data Validation
+pydantic==2.7.0
+pydantic-settings==2.2.1
+email-validator==2.1.2
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+PyJWT==2.8.0
+cryptography==42.0.7
+python-multipart==0.0.9
+
+# HTTP Client
+httpx==0.27.0
+
+# Database
+sqlalchemy[asyncio]==2.0.30
+aiomysql==0.2.0
+alembic==1.13.1
+
+# Cache
+redis[asyncio]==5.0.4
+
+# Message Queue
+aio-pika==9.4.1
+
+# Vector DB
+pinecone-client==4.1.0
+
+# LLM / AI
+langchain==0.2.0
+langchain-openai==0.1.8
+langgraph==0.1.0
+langsmith==0.1.63
+openai==1.30.0
+
+# OCR / Document Intelligence
+azure-ai-documentintelligence==1.0.0b4
+paddleocr==2.7.3
+
+# Evaluation
+deepeval==0.21.0
+ragas==0.1.9
+
+# Observability
+prometheus-fastapi-instrumentator==7.0.0
+prometheus-client==0.20.0
+
+# Logging
+structlog==24.1.0
+rich==13.7.1
+
+# Utilities
+tenacity==8.3.0
+python-dotenv==1.0.1
+orjson==3.10.3
+slowapi==0.1.9
+python-dateutil==2.9.0
+pytz==2024.1

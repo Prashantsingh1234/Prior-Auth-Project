@@ -1,0 +1,55 @@
+# ============================================================
+# PA Review Platform — Docker Ignore
+# Keeps images lean and avoids leaking secrets
+# ============================================================
+
+# Secrets
+.env
+.env.*
+!.env.example
+secrets/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing / CI artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Uploads / temp
+uploads/
+tmp/
+
+# Grafana provisioning data
+grafana/data/
+
+# Node
+node_modules/
+frontend/.next/
