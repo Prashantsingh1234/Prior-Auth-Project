@@ -201,6 +201,25 @@ DOCUMENT_CONFIDENCE_SCORE = Histogram(
     buckets=[0.5, 0.6, 0.7, 0.75, 0.80, 0.85, 0.90, 0.95, 0.99, 1.0],
 )
 
+# Workflow
+PA_RECOMMENDATIONS_TOTAL = Counter(
+    name="pa_recommendations_total",
+    documentation="PA recommendations by type (approve | deny | pend_for_info | refer_medical_director)",
+    labelnames=["recommendation_type"],
+)
+
+WORKFLOW_LATENCY_SECONDS = Histogram(
+    name="pa_workflow_latency_seconds",
+    documentation="End-to-end workflow execution time in seconds",
+    buckets=[30, 60, 120, 300, 600, 1200, 1800, 3600],
+)
+
+WORKFLOW_INTERRUPTS_TOTAL = Counter(
+    name="pa_workflow_interrupts_total",
+    documentation="Workflow interrupt events by type",
+    labelnames=["interrupt_type"],  # clarification_required | human_review_required
+)
+
 
 class PAMetrics:
     """
@@ -238,6 +257,10 @@ class PAMetrics:
         self.document_ingestion_total = DOCUMENT_INGESTION_TOTAL
         self.document_ingestion_seconds = DOCUMENT_INGESTION_SECONDS
         self.document_confidence_score = DOCUMENT_CONFIDENCE_SCORE
+        # Workflow
+        self.pa_recommendations_total = PA_RECOMMENDATIONS_TOTAL
+        self.workflow_latency_seconds = WORKFLOW_LATENCY_SECONDS
+        self.workflow_interrupts_total = WORKFLOW_INTERRUPTS_TOTAL
 
 
 # Module-level singleton
