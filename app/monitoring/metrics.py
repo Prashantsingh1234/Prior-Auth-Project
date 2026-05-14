@@ -160,6 +160,48 @@ CACHE_SET_SIZE_BYTES = Summary(
 )
 
 
+# OCR Fallback
+OCR_FALLBACK_TOTAL = Counter(
+    name="pa_ocr_fallback_total",
+    documentation="OCR fallback events by reason and provider transition",
+    labelnames=["reason", "from_provider", "to_provider"],
+)
+
+OCR_PROCESSING_SECONDS = Histogram(
+    name="pa_ocr_processing_seconds",
+    documentation="OCR extraction latency per provider and document type",
+    labelnames=["provider", "document_type"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0],
+)
+
+OCR_PAGES_TOTAL = Counter(
+    name="pa_ocr_pages_total",
+    documentation="Total pages processed by each OCR provider",
+    labelnames=["provider"],
+)
+
+# Document Ingestion
+DOCUMENT_INGESTION_TOTAL = Counter(
+    name="pa_document_ingestion_total",
+    documentation="Total documents ingested by type and status",
+    labelnames=["document_type", "status"],
+)
+
+DOCUMENT_INGESTION_SECONDS = Histogram(
+    name="pa_document_ingestion_seconds",
+    documentation="End-to-end document ingestion latency by document type",
+    labelnames=["document_type"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0],
+)
+
+DOCUMENT_CONFIDENCE_SCORE = Histogram(
+    name="pa_document_confidence_score",
+    documentation="Final document confidence score after OCR/normalization",
+    labelnames=["document_type", "ocr_provider"],
+    buckets=[0.5, 0.6, 0.7, 0.75, 0.80, 0.85, 0.90, 0.95, 0.99, 1.0],
+)
+
+
 class PAMetrics:
     """
     Convenience wrapper giving attribute-style access to all metrics.
@@ -189,6 +231,13 @@ class PAMetrics:
         self.cache_misses_total = CACHE_MISSES_TOTAL
         self.cache_errors_total = CACHE_ERRORS_TOTAL
         self.cache_set_size_bytes = CACHE_SET_SIZE_BYTES
+        # OCR + Document ingestion
+        self.ocr_fallback_total = OCR_FALLBACK_TOTAL
+        self.ocr_processing_seconds = OCR_PROCESSING_SECONDS
+        self.ocr_pages_total = OCR_PAGES_TOTAL
+        self.document_ingestion_total = DOCUMENT_INGESTION_TOTAL
+        self.document_ingestion_seconds = DOCUMENT_INGESTION_SECONDS
+        self.document_confidence_score = DOCUMENT_CONFIDENCE_SCORE
 
 
 # Module-level singleton
