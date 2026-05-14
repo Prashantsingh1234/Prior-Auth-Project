@@ -115,6 +115,18 @@ class Settings(BaseSettings):
     azure_ocr_timeout: int = Field(default=30)
 
     # ----------------------------------------------------------
+    # ICD API — WHO ICD-11 (code validation + lookup)
+    # ----------------------------------------------------------
+    icd_api_client_id: str | None = Field(default=None)
+    icd_api_client_secret: SecretStr | None = Field(default=None)
+    icd_api_base_url: str = Field(default="https://id.who.int/icd")
+    icd_api_token_url: str = Field(
+        default="https://icdaccessmanagement.who.int/connect/token"
+    )
+    icd_api_version: str = Field(default="v2")
+    icd_api_release: str = Field(default="2024-01")
+
+    # ----------------------------------------------------------
     # LangSmith (Tracing & Evaluation)
     # ----------------------------------------------------------
     langsmith_api_key: SecretStr | None = Field(default=None)
