@@ -221,6 +221,52 @@ WORKFLOW_INTERRUPTS_TOTAL = Counter(
 )
 
 
+# Hybrid Retrieval Orchestrator
+RETRIEVAL_STRATEGY_LATENCY_SECONDS = Histogram(
+    name="pa_retrieval_strategy_latency_seconds",
+    documentation="Per-strategy retrieval latency in the hybrid orchestrator",
+    labelnames=["strategy"],  # semantic | hybrid | cpt | icd
+    buckets=[0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0],
+)
+
+RETRIEVAL_FUSION_CANDIDATES = Histogram(
+    name="pa_retrieval_fusion_candidates",
+    documentation="Number of candidate chunks entering RRF fusion",
+    buckets=[5, 10, 20, 50, 100, 200],
+)
+
+RETRIEVAL_PRECISION_AT_K = Histogram(
+    name="pa_retrieval_precision_at_k",
+    documentation="Proxy Precision@K for the hybrid retrieval pipeline (k=5)",
+    buckets=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+)
+
+RETRIEVAL_NDCG_AT_K = Histogram(
+    name="pa_retrieval_ndcg_at_k",
+    documentation="Proxy NDCG@K for the hybrid retrieval pipeline (k=5)",
+    buckets=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+)
+
+RERANKER_LATENCY_SECONDS = Histogram(
+    name="pa_reranker_latency_seconds",
+    documentation="Reranker (Cohere or fallback) call latency",
+    labelnames=["reranker_type"],  # cohere | score_fusion
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.0, 5.0],
+)
+
+CPT_EXPANSION_SIZE = Histogram(
+    name="pa_cpt_expansion_size",
+    documentation="Number of CPT codes after hierarchy expansion",
+    buckets=[1, 2, 3, 5, 10, 15, 20],
+)
+
+ICD_EXPANSION_SIZE = Histogram(
+    name="pa_icd_expansion_size",
+    documentation="Number of ICD codes after hierarchy expansion",
+    buckets=[1, 2, 3, 5, 10, 15, 25],
+)
+
+
 class PAMetrics:
     """
     Convenience wrapper giving attribute-style access to all metrics.
@@ -261,6 +307,14 @@ class PAMetrics:
         self.pa_recommendations_total = PA_RECOMMENDATIONS_TOTAL
         self.workflow_latency_seconds = WORKFLOW_LATENCY_SECONDS
         self.workflow_interrupts_total = WORKFLOW_INTERRUPTS_TOTAL
+        # Hybrid retrieval orchestrator
+        self.retrieval_strategy_latency_seconds = RETRIEVAL_STRATEGY_LATENCY_SECONDS
+        self.retrieval_fusion_candidates = RETRIEVAL_FUSION_CANDIDATES
+        self.retrieval_precision_at_k = RETRIEVAL_PRECISION_AT_K
+        self.retrieval_ndcg_at_k = RETRIEVAL_NDCG_AT_K
+        self.reranker_latency_seconds = RERANKER_LATENCY_SECONDS
+        self.cpt_expansion_size = CPT_EXPANSION_SIZE
+        self.icd_expansion_size = ICD_EXPANSION_SIZE
 
 
 # Module-level singleton
