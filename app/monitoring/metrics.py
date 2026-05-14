@@ -267,6 +267,57 @@ ICD_EXPANSION_SIZE = Histogram(
 )
 
 
+# AI Reasoning Engine — Guardrails + Multi-Model Orchestration
+GUARDRAIL_VIOLATIONS_TOTAL = Counter(
+    name="pa_guardrail_violations_total",
+    documentation="Guardrail violations by type and severity",
+    labelnames=["violation_type", "severity"],
+)
+
+GUARDRAIL_PASS_RATE = Counter(
+    name="pa_guardrail_outcomes_total",
+    documentation="Guardrail pipeline pass/fail outcomes",
+    labelnames=["result"],  # pass | fail
+)
+
+REASONING_ESCALATIONS_TOTAL = Counter(
+    name="pa_reasoning_escalations_total",
+    documentation="Model escalation events by trigger and source tier",
+    labelnames=["trigger", "from_tier"],
+)
+
+REASONING_ATTEMPTS_TOTAL = Counter(
+    name="pa_reasoning_attempts_total",
+    documentation="LLM reasoning attempts by tier and outcome",
+    labelnames=["tier", "outcome"],  # outcome: success | failure
+)
+
+REASONING_HUMAN_ESCALATIONS_TOTAL = Counter(
+    name="pa_reasoning_human_escalations_total",
+    documentation="Cases escalated to human review from the reasoning engine",
+    labelnames=["reason"],  # repeated_violations | unsafe_output | max_attempts | input_invalid
+)
+
+REASONING_GUARDRAIL_VIOLATIONS_TOTAL = Counter(
+    name="pa_reasoning_guardrail_violations_total",
+    documentation="Per-violation-type count from the reasoning guardrail pipeline",
+    labelnames=["violation_type"],
+)
+
+REASONING_LATENCY_SECONDS = Histogram(
+    name="pa_reasoning_latency_seconds",
+    documentation="End-to-end reasoning pipeline latency per policy evaluation",
+    labelnames=["tier"],  # small | medium | large
+    buckets=[1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 120.0],
+)
+
+REASONING_CONFIDENCE_SCORE = Histogram(
+    name="pa_reasoning_confidence_score",
+    documentation="Overall confidence score from the reasoning engine",
+    buckets=[0.3, 0.4, 0.5, 0.6, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0],
+)
+
+
 class PAMetrics:
     """
     Convenience wrapper giving attribute-style access to all metrics.
@@ -307,6 +358,15 @@ class PAMetrics:
         self.pa_recommendations_total = PA_RECOMMENDATIONS_TOTAL
         self.workflow_latency_seconds = WORKFLOW_LATENCY_SECONDS
         self.workflow_interrupts_total = WORKFLOW_INTERRUPTS_TOTAL
+        # Guardrails + reasoning engine
+        self.guardrail_violations_total = GUARDRAIL_VIOLATIONS_TOTAL
+        self.guardrail_pass_rate = GUARDRAIL_PASS_RATE
+        self.reasoning_escalations_total = REASONING_ESCALATIONS_TOTAL
+        self.reasoning_attempts_total = REASONING_ATTEMPTS_TOTAL
+        self.reasoning_human_escalations_total = REASONING_HUMAN_ESCALATIONS_TOTAL
+        self.reasoning_guardrail_violations_total = REASONING_GUARDRAIL_VIOLATIONS_TOTAL
+        self.reasoning_latency_seconds = REASONING_LATENCY_SECONDS
+        self.reasoning_confidence_score = REASONING_CONFIDENCE_SCORE
         # Hybrid retrieval orchestrator
         self.retrieval_strategy_latency_seconds = RETRIEVAL_STRATEGY_LATENCY_SECONDS
         self.retrieval_fusion_candidates = RETRIEVAL_FUSION_CANDIDATES
