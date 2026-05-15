@@ -13,14 +13,18 @@ Design principles:
 - previous_state and new_state capture full snapshots for forensic analysis
 - actor_type distinguishes human users from system/AI actions
 - request_id and trace_id link audit entries to HTTP request logs
+- Extended columns (audit_category … content_hash) added for structured audit system
 """
 
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 from sqlalchemy import (
+    DateTime,
     Enum as SAEnum,
+    Float,
     Index,
     JSON,
     String,
@@ -124,6 +128,76 @@ class AuditLog(UUIDMixin, TimestampMixin, Base):
     )
 
     # ----------------------------------------------------------
+    # Structured Audit System — Extended Columns
+    # Added to support the compliance-grade AuditRecord fields
+    # from app.audit.models.  All nullable so existing rows are
+    # unaffected; new inserts populate them via DatabaseAuditStorage.
+    # ----------------------------------------------------------
+
+    # Fine-grained category from the audit system (e.g. "ocr", "llm_call")
+    audit_category: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, index=True,
+        comment="AuditCategory value from the structured audit system",
+    )
+    # Severity level: debug / info / warning / error / critical
+    audit_severity: Mapped[str | None] = mapped_column(
+        String(20), nullable=True,
+        comment="AuditSeverity value",
+    )
+    # Exact timestamp of the event (may differ from created_at by queue latency)
+    occurred_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True,
+        comment="Wall-clock time the event occurred, before queue delay",
+    )
+    # Processing duration in milliseconds
+    duration_ms: Mapped[float | None] = mapped_column(
+        Float, nullable=True,
+        comment="End-to-end duration of the audited operation in ms",
+    )
+    # Session identifier for cross-request user journey tracing
+    session_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True,
+        comment="Session ID from auth layer",
+    )
+    # Domain-specific foreign keys (denormalized for query performance)
+    document_id: Mapped[str | None] = mapped_column(
+        CHAR(36), nullable=True, index=True,
+        comment="UUID of the source document (OCR / extraction events)",
+    )
+    policy_id: Mapped[str | None] = mapped_column(
+        CHAR(36), nullable=True, index=True,
+        comment="UUID of the evaluated policy (retrieval / LLM events)",
+    )
+    attempt_id: Mapped[str | None] = mapped_column(
+        CHAR(36), nullable=True,
+        comment="UUID of a ClarificationAttempt (clarification events)",
+    )
+    # Full structured payload — stored as JSON, never logged (may contain PII)
+    event_data: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True,
+        comment="Full event payload (PII present — DB only, not in logs)",
+    )
+    # Error classification fields
+    error_type: Mapped[str | None] = mapped_column(
+        String(120), nullable=True,
+        comment="Exception class name for error events",
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+        comment="Human-readable error message",
+    )
+    # SHA-256 prefix of error message for grouping without storing full text
+    error_hash: Mapped[str | None] = mapped_column(
+        String(16), nullable=True,
+        comment="First 16 hex chars of SHA-256(error_message) for grouping",
+    )
+    # Tamper-evidence hash over key immutable fields
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True,
+        comment="SHA-256 of core record fields; used to detect tampering",
+    )
+
+    # ----------------------------------------------------------
     # Indexes
     # ----------------------------------------------------------
     __table_args__ = (
@@ -136,6 +210,12 @@ class AuditLog(UUIDMixin, TimestampMixin, Base):
         Index("ix_audit_request_id", "request_id"),
         # Composite for "all events for entity X" query
         Index("ix_audit_entity_lookup", "entity_type", "entity_id", "created_at"),
+        # Compliance queries: "all LLM calls in the last 30 days"
+        Index("ix_audit_category_occurred", "audit_category", "occurred_at"),
+        # Error aggregation: "group errors by hash"
+        Index("ix_audit_error_hash", "error_hash"),
+        # Document-level trace: "all events for document D"
+        Index("ix_audit_document_id", "document_id"),
     )
 
     def __repr__(self) -> str:

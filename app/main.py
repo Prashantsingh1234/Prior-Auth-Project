@@ -30,6 +30,8 @@ from app.core.config.settings import get_settings
 from app.core.exceptions.handlers import register_exception_handlers
 from app.core.logging.setup import configure_logging
 from app.db.session.database import close_db_connection, init_db_connection
+from app.audit.middleware import AuditMiddleware
+from app.audit.writer import get_audit_writer
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.tracing import RequestTracingMiddleware
@@ -82,6 +84,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_metrics(app)
     logger.info("application.startup.metrics_ready")
 
+    # Audit writer — start after DB is ready (writer flushes to DB)
+    try:
+        await get_audit_writer().start()
+        logger.info("application.startup.audit_writer_ready")
+    except Exception as exc:
+        # Audit writer failure is non-fatal: structlog fallback is always active
+        logger.warning("application.startup.audit_writer_failed", error=str(exc))
+
     startup_duration = round(time.monotonic() - startup_start, 3)
     logger.info(
         "application.startup.complete",
@@ -94,6 +104,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # --- SHUTDOWN ---
     logger.info("application.shutdown.begin")
+
+    # Audit writer — drain before closing DB to ensure all records are persisted
+    try:
+        await get_audit_writer().stop(drain_timeout=30.0)
+        logger.info("application.shutdown.audit_writer_stopped")
+    except Exception as exc:
+        logger.warning("application.shutdown.audit_writer_stop_failed", error=str(exc))
 
     try:
         await close_redis()
@@ -150,11 +167,16 @@ def create_application() -> FastAPI:
     # Middleware registration (outermost wrapper first)
     #
     # Execution order for incoming requests (top → bottom):
-    #   1. TrustedHostMiddleware  — security boundary
-    #   2. CORSMiddleware         — cross-origin headers
+    #   1. TrustedHostMiddleware     — security boundary
+    #   2. CORSMiddleware            — cross-origin headers
     #   3. SecurityHeadersMiddleware — response hardening
     #   4. RequestTracingMiddleware  — inject request_id / trace_id
-    #   5. RequestLoggingMiddleware  — structured access logging
+    #   5. AuditMiddleware           — bind AuditContext, emit API_REQUEST record
+    #   6. RequestLoggingMiddleware  — structured access logging
+    #
+    # AuditMiddleware sits after RequestTracingMiddleware so that
+    # request_id and trace_id are already set in request.state when
+    # the audit context is built.
     #
     # For responses, middleware executes in reverse order (bottom → top)
     # ----------------------------------------------------------
@@ -179,10 +201,13 @@ def create_application() -> FastAPI:
     # 3. Security headers — added to every response
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # 4. Request tracing — must come before logging so IDs are available in logs
+    # 4. Request tracing — must come before audit so IDs are available
     app.add_middleware(RequestTracingMiddleware)
 
-    # 5. Request/response logging — innermost, has full request context
+    # 5. Audit — binds AuditContext to contextvars for the full request duration
+    app.add_middleware(AuditMiddleware)
+
+    # 6. Request/response logging — innermost, has full request context
     app.add_middleware(RequestLoggingMiddleware)
 
     # ----------------------------------------------------------
