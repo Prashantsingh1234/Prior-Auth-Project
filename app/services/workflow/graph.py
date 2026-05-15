@@ -164,6 +164,7 @@ def compile_graph(
     *,
     interrupt_before: list[str] | None = None,
     interrupt_after: list[str] | None = None,
+    callbacks: list | None = None,
 ):
     """
     Compile the workflow graph with the given checkpointer.
@@ -194,6 +195,12 @@ def compile_graph(
         compile_kwargs["interrupt_after"] = interrupt_after
 
     compiled = graph.compile(**compile_kwargs)
+
+    if callbacks:
+        try:
+            compiled = compiled.with_config({"callbacks": callbacks})
+        except Exception as exc:
+            logger.warning("workflow.graph_callbacks_failed", error=str(exc))
 
     logger.info(
         "workflow.graph_compiled",

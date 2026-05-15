@@ -46,8 +46,16 @@ from app.services.workflow.state.schema import (
     initial_state,
     state_summary,
 )
+from app.tracing.callbacks import PAWorkflowCallbackHandler
+from app.tracing.tracer import WorkflowTracer
 
 logger = structlog.get_logger(__name__)
+
+# Safe state fields to send to LangSmith as workflow inputs (no PHI)
+_SAFE_INPUT_FIELDS = frozenset({
+    "case_id", "pa_request_id", "payer_id", "service_type",
+    "workflow_phase", "workflow_version", "max_clarification_attempts",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +129,8 @@ class WorkflowRunner:
     def __init__(self, compiled_graph) -> None:
         self._graph = compiled_graph
         self._log   = structlog.get_logger(self.__class__.__name__)
+        # Per-case tracers: case_id → WorkflowTracer (cleared on completion)
+        self._tracers: dict[str, WorkflowTracer] = {}
 
     # ------------------------------------------------------------------
     # Start a new workflow
@@ -154,6 +164,24 @@ class WorkflowRunner:
         """
         t0 = time.monotonic()
 
+        # Create a per-request WorkflowTracer and open the top-level LangSmith run
+        tracer = WorkflowTracer.for_case(case_id, parent_run_id=langsmith_run_id)
+        self._tracers[case_id] = tracer
+
+        safe_inputs = {
+            "case_id": case_id,
+            "pa_request_id": pa_request_id,
+            "payer_id": payer_id,
+            "service_type": service_type,
+            "doc_count": len(documents),
+            "workflow_version": workflow_version,
+        }
+        workflow_run_id = tracer.start_workflow(
+            inputs=safe_inputs,
+            tags=["pa-workflow", f"case-{case_id}"],
+            metadata={"max_clarification_attempts": max_clarification_attempts},
+        )
+
         state = initial_state(
             case_id=case_id,
             pa_request_id=pa_request_id,
@@ -163,20 +191,21 @@ class WorkflowRunner:
             requesting_npi=requesting_npi,
             max_clarification_attempts=max_clarification_attempts,
             workflow_version=workflow_version,
-            langsmith_run_id=langsmith_run_id,
+            langsmith_run_id=workflow_run_id,
         )
         # Inject documents into the initial state
         state = {**state, "raw_documents": documents}
 
-        config = self._config(case_id)
+        config = self._config(case_id, tracer=tracer)
 
         self._log.info(
             "runner.workflow_started",
             case_id=case_id,
             doc_count=len(documents),
+            langsmith_run_id=workflow_run_id,
         )
 
-        return await self._invoke(state, config, t0)
+        return await self._invoke(state, config, t0, tracer=tracer)
 
     # ------------------------------------------------------------------
     # Resume after clarification
@@ -198,7 +227,8 @@ class WorkflowRunner:
           3. Resume graph execution (ainvoke with None).
         """
         t0     = time.monotonic()
-        config = self._config(case_id)
+        tracer = self._tracers.get(case_id)
+        config = self._config(case_id, tracer=tracer)
 
         # Get current state from checkpoint
         checkpoint_tuple = await self._graph.checkpointer.aget_tuple(config)
@@ -234,7 +264,7 @@ class WorkflowRunner:
             response_len=len(response),
         )
 
-        return await self._invoke(None, config, t0)
+        return await self._invoke(None, config, t0, tracer=tracer)
 
     # ------------------------------------------------------------------
     # Resume after human review
@@ -253,7 +283,8 @@ class WorkflowRunner:
           2. Resume graph execution.
         """
         t0     = time.monotonic()
-        config = self._config(case_id)
+        tracer = self._tracers.get(case_id)
+        config = self._config(case_id, tracer=tracer)
 
         await self._graph.aupdate_state(
             config,
@@ -267,7 +298,7 @@ class WorkflowRunner:
             action_type=action.action_type.value,
         )
 
-        return await self._invoke(None, config, t0)
+        return await self._invoke(None, config, t0, tracer=tracer)
 
     # ------------------------------------------------------------------
     # Mark a clarification as timed out
@@ -280,7 +311,8 @@ class WorkflowRunner:
     ) -> WorkflowResult:
         """Mark a pending clarification as timed out and resume."""
         t0     = time.monotonic()
-        config = self._config(case_id)
+        tracer = self._tracers.get(case_id)
+        config = self._config(case_id, tracer=tracer)
 
         checkpoint_tuple = await self._graph.checkpointer.aget_tuple(config)
         if not checkpoint_tuple:
@@ -294,7 +326,7 @@ class WorkflowRunner:
         ]
 
         await self._graph.aupdate_state(config, {"clarification_attempts": attempts})
-        return await self._invoke(None, config, t0)
+        return await self._invoke(None, config, t0, tracer=tracer)
 
     # ------------------------------------------------------------------
     # State inspection
@@ -382,9 +414,11 @@ class WorkflowRunner:
         state: PAWorkflowState | None,
         config: dict,
         t0: float,
+        tracer: WorkflowTracer | None = None,
     ) -> WorkflowResult:
         """Call graph.ainvoke(), catch interrupts, and wrap the result."""
         case_id = config["configurable"]["thread_id"]
+        result: WorkflowResult | None = None
 
         try:
             final_state: PAWorkflowState = await self._graph.ainvoke(state, config)
@@ -403,7 +437,7 @@ class WorkflowRunner:
                 elapsed_ms=round(elapsed_ms, 1),
             )
 
-            return WorkflowResult(
+            result = WorkflowResult(
                 case_id=case_id,
                 is_complete=is_complete,
                 is_interrupted=False,
@@ -415,6 +449,20 @@ class WorkflowRunner:
                 error=error,
                 elapsed_ms=elapsed_ms,
             )
+
+            if tracer is not None and is_complete:
+                try:
+                    outputs = {
+                        "phase": str(phase),
+                        "has_recommendation": recommendation is not None,
+                        "elapsed_ms": round(elapsed_ms, 1),
+                    }
+                    tracer.end_workflow(outputs=outputs, error=error)
+                    self._tracers.pop(case_id, None)
+                except Exception:
+                    pass
+
+            return result
 
         except Exception as exc:
             elapsed_ms = (time.monotonic() - t0) * 1000
@@ -433,7 +481,7 @@ class WorkflowRunner:
                 # Read back the phase from the latest checkpoint
                 saved_state = await self.get_state(case_id)
                 phase = (saved_state or {}).get("workflow_phase", WorkflowPhase.CLARIFICATION)
-                return WorkflowResult(
+                result = WorkflowResult(
                     case_id=case_id,
                     is_complete=False,
                     is_interrupted=True,
@@ -444,8 +492,16 @@ class WorkflowRunner:
                     state=saved_state,
                     elapsed_ms=elapsed_ms,
                 )
+                return result
 
-            # Genuine error
+            # Genuine error — close the tracer run with error before re-raising
+            if tracer is not None:
+                try:
+                    tracer.end_workflow(outputs={}, error=f"{type(exc).__name__}: {exc}")
+                    self._tracers.pop(case_id, None)
+                except Exception:
+                    pass
+
             self._log.error(
                 "runner.invocation_failed",
                 case_id=case_id,
@@ -483,10 +539,27 @@ class WorkflowRunner:
 
         return None
 
-    @staticmethod
-    def _config(case_id: str) -> dict:
+    def _config(
+        self,
+        case_id: str,
+        tracer: WorkflowTracer | None = None,
+    ) -> dict:
         """Build a LangGraph RunnableConfig for the given case."""
-        return {"configurable": {"thread_id": case_id}}
+        cfg: dict = {"configurable": {"thread_id": case_id}}
+
+        # Attach LangChain callback handler so LLM/chain events are traced
+        if tracer is not None:
+            handler = PAWorkflowCallbackHandler(
+                case_id=case_id,
+                workflow_run_id=None,
+                tracer=tracer,
+            )
+            cfg["callbacks"] = [handler]
+            cfg["run_name"]  = f"PA-Review-{case_id}"
+            cfg["tags"]      = ["pa-workflow", f"case-{case_id}"]
+            cfg["metadata"]  = {"case_id": case_id}
+
+        return cfg
 
     # ------------------------------------------------------------------
     # Factory

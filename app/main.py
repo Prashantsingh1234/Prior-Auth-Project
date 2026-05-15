@@ -37,6 +37,8 @@ from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.tracing import RequestTracingMiddleware
 from app.monitoring.metrics import setup_metrics
 from app.services.caching.redis_client import close_redis, init_redis
+from app.tracing.config import configure_langsmith
+from app.tracing.middleware import LangSmithTracingMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -62,6 +64,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         environment=get_settings().environment,
         version=get_settings().app_version,
     )
+
+    # LangSmith — configure before DB init so env vars are set before any
+    # LangChain imports that read LANGCHAIN_TRACING_V2 at import time
+    try:
+        langsmith_cfg = configure_langsmith()
+        logger.info(
+            "application.startup.langsmith_configured",
+            active=langsmith_cfg.is_active,
+            project=langsmith_cfg.project,
+        )
+    except Exception as exc:
+        logger.warning("application.startup.langsmith_failed", error=str(exc))
 
     # Database connection pool
     try:
@@ -167,16 +181,17 @@ def create_application() -> FastAPI:
     # Middleware registration (outermost wrapper first)
     #
     # Execution order for incoming requests (top → bottom):
-    #   1. TrustedHostMiddleware     — security boundary
-    #   2. CORSMiddleware            — cross-origin headers
-    #   3. SecurityHeadersMiddleware — response hardening
-    #   4. RequestTracingMiddleware  — inject request_id / trace_id
-    #   5. AuditMiddleware           — bind AuditContext, emit API_REQUEST record
-    #   6. RequestLoggingMiddleware  — structured access logging
+    #   1. TrustedHostMiddleware        — security boundary
+    #   2. CORSMiddleware               — cross-origin headers
+    #   3. SecurityHeadersMiddleware    — response hardening
+    #   4. RequestTracingMiddleware     — inject request_id / trace_id
+    #   5. LangSmithTracingMiddleware   — propagate X-LangSmith-Run-ID contextvar
+    #   6. AuditMiddleware              — bind AuditContext, emit API_REQUEST record
+    #   7. RequestLoggingMiddleware     — structured access logging
     #
-    # AuditMiddleware sits after RequestTracingMiddleware so that
-    # request_id and trace_id are already set in request.state when
-    # the audit context is built.
+    # LangSmithTracingMiddleware sits after RequestTracingMiddleware so the
+    # request already has a trace_id, and before AuditMiddleware so LangSmith
+    # run context is available when audit events are emitted.
     #
     # For responses, middleware executes in reverse order (bottom → top)
     # ----------------------------------------------------------
@@ -195,19 +210,22 @@ def create_application() -> FastAPI:
         allow_credentials=settings.cors_allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID", "X-Trace-ID"],
+        expose_headers=["X-Request-ID", "X-Trace-ID", "X-LangSmith-Run-URL"],
     )
 
     # 3. Security headers — added to every response
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # 4. Request tracing — must come before audit so IDs are available
+    # 4. Request tracing — must come before LangSmith and audit so IDs are available
     app.add_middleware(RequestTracingMiddleware)
 
-    # 5. Audit — binds AuditContext to contextvars for the full request duration
+    # 5. LangSmith — propagate run-id contextvar; adds X-LangSmith-Run-URL to responses
+    app.add_middleware(LangSmithTracingMiddleware)
+
+    # 6. Audit — binds AuditContext to contextvars for the full request duration
     app.add_middleware(AuditMiddleware)
 
-    # 6. Request/response logging — innermost, has full request context
+    # 7. Request/response logging — innermost, has full request context
     app.add_middleware(RequestLoggingMiddleware)
 
     # ----------------------------------------------------------

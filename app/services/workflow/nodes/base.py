@@ -28,7 +28,7 @@ from __future__ import annotations
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from tenacity import (
@@ -41,6 +41,9 @@ from tenacity import (
 from app.services.workflow.state import mutations
 from app.services.workflow.state.audit import AuditContext
 from app.services.workflow.state.schema import PAWorkflowState
+
+if TYPE_CHECKING:
+    from app.tracing.tracer import WorkflowTracer
 
 logger = structlog.get_logger(__name__)
 
@@ -104,15 +107,19 @@ class NodeContext:
     Thin wrapper passed from __call__ into execute().
 
     Provides:
-      - audit_ctx  : AuditContext for emitting structured audit events
-      - log        : bound structlog logger with case_id pre-set
-      - elapsed_ms : wall-clock ms since the node was invoked
+      - audit_ctx       : AuditContext for emitting structured audit events
+      - log             : bound structlog logger with case_id pre-set
+      - elapsed_ms      : wall-clock ms since the node was invoked
+      - tracer          : WorkflowTracer | None for LangSmith child runs
+      - langsmith_run_id: populated by @trace_node after start_node()
     """
 
     node_name: str
     case_id: str
     step: int = 0
     _t0: float = field(default_factory=time.monotonic, repr=False)
+    tracer: "WorkflowTracer | None" = field(default=None, repr=False)
+    langsmith_run_id: str | None = field(default=None, repr=False)
 
     @property
     def audit_ctx(self) -> AuditContext:
@@ -152,12 +159,36 @@ class BaseNode(ABC):
     def __init__(self) -> None:
         self._log = structlog.get_logger(self.__class__.__name__)
 
-    async def __call__(self, state: PAWorkflowState) -> dict[str, Any]:
+    async def __call__(
+        self,
+        state: PAWorkflowState,
+        tracer: "WorkflowTracer | None" = None,
+    ) -> dict[str, Any]:
         case_id = state.get("case_id", "unknown")
-        step    = state.get("retry_count", 0)  # use retry_count as a proxy for step
+        step    = state.get("retry_count", 0)
 
-        nctx = NodeContext(node_name=self.node_name, case_id=case_id, step=step)
+        # Prefer tracer injected via argument; fall back to state metadata
+        if tracer is None:
+            tracer = state.get("_tracer")  # type: ignore[assignment]
+
+        nctx = NodeContext(
+            node_name=self.node_name,
+            case_id=case_id,
+            step=step,
+            tracer=tracer,
+        )
         nctx.log.info(f"{self.node_name}.started")
+
+        # Open a LangSmith child run for this node
+        if tracer is not None:
+            try:
+                run_id = tracer.start_node(self.node_name, state)
+                nctx.langsmith_run_id = run_id
+            except Exception:
+                pass
+
+        error_str: str | None = None
+        result: dict[str, Any] = {}
 
         try:
             result = await self.execute(state, nctx)
@@ -167,22 +198,50 @@ class BaseNode(ABC):
             )
             return result
 
-        except NodeInterrupt:
+        except NodeInterrupt as exc:
             # Interrupts are NOT errors — pass them through so LangGraph can
             # persist the checkpoint and surface the interrupt payload to the caller.
             nctx.log.info(f"{self.node_name}.interrupted")
+            interrupt_payload = exc.value if hasattr(exc, "value") else {}
+            if tracer is not None:
+                try:
+                    interrupt_type = (
+                        interrupt_payload.get("type", "unknown")
+                        if isinstance(interrupt_payload, dict)
+                        else "unknown"
+                    )
+                    tracer.log_interrupt(
+                        self.node_name,
+                        interrupt_type,
+                        interrupt_payload if isinstance(interrupt_payload, dict) else {},
+                    )
+                except Exception:
+                    pass
             raise
 
         except Exception as exc:
+            error_str = f"{type(exc).__name__}: {exc}"
             nctx.log.error(
                 f"{self.node_name}.error",
                 error=str(exc),
                 exc_type=type(exc).__name__,
                 exc_info=True,
             )
-            return mutations.with_error(
+            result = mutations.with_error(
                 str(exc), nctx.audit_ctx, exc_type=type(exc).__name__
             )
+            return result
+
+        finally:
+            if tracer is not None:
+                try:
+                    tracer.end_node(
+                        self.node_name,
+                        result if isinstance(result, dict) else {},
+                        error_str,
+                    )
+                except Exception:
+                    pass
 
     @abstractmethod
     async def execute(
