@@ -1,5 +1,5 @@
 # ============================================================
-# PA Review Platform — Prometheus Scrape Configuration
+# PA Review Platform — Prometheus Configuration
 # ============================================================
 
 global:
@@ -8,6 +8,17 @@ global:
   external_labels:
     cluster: "pa-platform"
     environment: "development"
+
+# Load alert + recording rules
+rule_files:
+  - "/etc/prometheus/alerts.yml"
+  - "/etc/prometheus/recording_rules.yml"
+
+# Alertmanager integration (enable when alertmanager container is running)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
 
 scrape_configs:
   # FastAPI application metrics
@@ -22,7 +33,12 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Redis metrics (if redis_exporter is added later)
+  # Redis metrics (enable when redis_exporter sidecar is added)
   # - job_name: "redis"
   #   static_configs:
   #     - targets: ["redis-exporter:9121"]
+
+  # Node / host metrics (enable with node_exporter)
+  # - job_name: "node"
+  #   static_configs:
+  #     - targets: ["node-exporter:9100"]

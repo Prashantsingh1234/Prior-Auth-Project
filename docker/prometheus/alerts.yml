@@ -1,0 +1,315 @@
+groups:
+  # -------------------------------------------------------
+  # API availability & latency SLOs
+  # -------------------------------------------------------
+  - name: pa_api_slo
+    rules:
+      - alert: APIHighErrorRate
+        expr: |
+          (
+            sum(rate(pa_http_errors_total{error_category="server_error"}[5m]))
+            /
+            clamp_min(sum(rate(http_request_duration_seconds_count[5m])), 0.001)
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "API server error rate above 1%"
+          description: >
+            Server error rate is {{ $value | humanizePercentage }} over the last 5 minutes.
+            SLO target: < 1%. Investigate recent deployments or upstream dependencies.
+
+      - alert: APIHighErrorRateCritical
+        expr: |
+          (
+            sum(rate(pa_http_errors_total{error_category="server_error"}[5m]))
+            /
+            clamp_min(sum(rate(http_request_duration_seconds_count[5m])), 0.001)
+          ) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API server error rate above 5% — SLO breach"
+          description: >
+            Server error rate is {{ $value | humanizePercentage }}. Immediate investigation required.
+
+      - alert: APIHighP95Latency
+        expr: pa:http_latency_p95_5m > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "API p95 latency above 2 s"
+          description: >
+            p95 latency is {{ $value | humanizeDuration }}. SLO target: < 2 s.
+
+      - alert: APIHighP99Latency
+        expr: pa:http_latency_p99_5m > 5.0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API p99 latency above 5 s"
+          description: >
+            p99 latency is {{ $value | humanizeDuration }}. Tail-latency SLO breached.
+
+  # -------------------------------------------------------
+  # LLM performance
+  # -------------------------------------------------------
+  - name: pa_llm_alerts
+    rules:
+      - alert: LLMHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, operation) (
+              rate(pa_llm_latency_seconds_bucket[5m])
+            )
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "LLM p95 latency above 30 s for operation {{ $labels.operation }}"
+          description: >
+            LLM call p95 latency is {{ $value | humanizeDuration }} for operation={{ $labels.operation }}.
+            Check provider rate limits or model availability.
+
+      - alert: LLMErrorSpike
+        expr: pa:llm_error_rate5m > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "LLM error rate above 0.1 errors/s"
+          description: >
+            LLM API errors at {{ $value }}/s. Check provider status page and API key quotas.
+
+      - alert: LLMErrorSpikeCritical
+        expr: pa:llm_error_rate5m > 1.0
+        for: 1m
+        labels:
+          severity: critical
+          team: ai
+        annotations:
+          summary: "LLM error rate critical — > 1 error/s"
+          description: >
+            LLM is failing at {{ $value }}/s. Workflow processing is likely stalled.
+
+      - alert: HighTokenUsageRate
+        expr: |
+          sum(pa:llm_token_rate5m) > 10000
+        for: 10m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "LLM token consumption rate above 10 000 tokens/s"
+          description: >
+            Token consumption is {{ $value }}/s. Review prompt lengths and caching coverage.
+
+  # -------------------------------------------------------
+  # OCR quality
+  # -------------------------------------------------------
+  - name: pa_ocr_alerts
+    rules:
+      - alert: LowOCRConfidence
+        expr: pa:ocr_confidence_p05_5m < 0.70
+        for: 5m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "OCR p5 confidence below 0.70 for provider {{ $labels.provider }}"
+          description: >
+            5th-percentile OCR confidence is {{ $value | humanizePercentage }}.
+            High volume of low-quality extractions may degrade downstream accuracy.
+
+      - alert: HighOCRFallbackRate
+        expr: pa:ocr_fallback_rate5m > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "OCR fallback rate above 0.2/s"
+          description: >
+            OCR is falling back at {{ $value }}/s. Primary OCR provider may be degraded.
+
+  # -------------------------------------------------------
+  # Queue backlog
+  # -------------------------------------------------------
+  - name: pa_queue_alerts
+    rules:
+      - alert: HighWorkflowQueueBacklog
+        expr: pa_queue_backlog_size{queue_name="pa_workflow"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "PA workflow queue backlog above 100"
+          description: >
+            Queue depth is {{ $value }}. Processing may be lagging. Check worker health.
+
+      - alert: CriticalWorkflowQueueBacklog
+        expr: pa_queue_backlog_size{queue_name="pa_workflow"} > 500
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "PA workflow queue backlog above 500 — processing severely lagged"
+          description: >
+            Queue depth is {{ $value }}. Scale up workers or investigate stalled cases.
+
+      - alert: HumanReviewQueueBacklog
+        expr: pa_queue_backlog_size{queue_name="human_review"} > 50
+        for: 10m
+        labels:
+          severity: warning
+          team: clinical
+        annotations:
+          summary: "Human review queue above 50 cases"
+          description: >
+            {{ $value }} cases pending human review. SLA for reviewer response may be at risk.
+
+  # -------------------------------------------------------
+  # Business metrics — approval / denial rates
+  # -------------------------------------------------------
+  - name: pa_business_alerts
+    rules:
+      - alert: UnexpectedlyHighDenialRate
+        expr: pa:denial_rate5m > 0.70
+        for: 15m
+        labels:
+          severity: warning
+          team: clinical
+        annotations:
+          summary: "PA denial rate above 70%"
+          description: >
+            Denial rate is {{ $value | humanizePercentage }} over 5 minutes.
+            Verify policy retrieval accuracy and AI reasoning quality.
+
+      - alert: UnexpectedlyLowApprovalRate
+        expr: pa:approval_rate5m < 0.10
+        for: 15m
+        labels:
+          severity: warning
+          team: clinical
+        annotations:
+          summary: "PA approval rate below 10%"
+          description: >
+            Approval rate is {{ $value | humanizePercentage }}. May indicate a policy
+            configuration error or data quality issue.
+
+      - alert: HighClarificationEscalationRate
+        expr: pa:clarification_escalation_rate5m > 0.40
+        for: 10m
+        labels:
+          severity: warning
+          team: clinical
+        annotations:
+          summary: "Clarification escalation rate above 40%"
+          description: >
+            {{ $value | humanizePercentage }} of clarification loops are escalating to human review.
+            Review clarification question quality and provider response patterns.
+
+  # -------------------------------------------------------
+  # Retrieval quality
+  # -------------------------------------------------------
+  - name: pa_retrieval_alerts
+    rules:
+      - alert: HighRetrievalLatency
+        expr: pa:retrieval_latency_p95_5m > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "Policy retrieval p95 latency above 2 s"
+          description: >
+            Retrieval p95 is {{ $value | humanizeDuration }} for type={{ $labels.retrieval_type }}.
+            Check vector store connectivity and index health.
+
+  # -------------------------------------------------------
+  # Guardrail / security
+  # -------------------------------------------------------
+  - name: pa_guardrail_alerts
+    rules:
+      - alert: GuardrailViolationSpike
+        expr: |
+          sum(rate(pa_guardrail_violations_total[5m])) > 1.0
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Guardrail violation rate above 1/s"
+          description: >
+            Guardrail violations at {{ $value }}/s. Review top violation types for
+            potential attack or data quality issue.
+
+      - alert: CriticalGuardrailViolations
+        expr: |
+          sum(rate(pa_guardrail_violations_total{severity="critical"}[5m])) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Critical guardrail violations detected"
+          description: >
+            Critical violations at {{ $value }}/s. Possible prompt injection or jailbreak attack.
+            Immediate review required.
+
+      - alert: LowGuardrailPassRate
+        expr: pa:guardrail_pass_rate5m < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Guardrail pass rate below 90%"
+          description: >
+            Only {{ $value | humanizePercentage }} of inputs passing guardrail checks.
+            High false-positive rate or active attack in progress.
+
+  # -------------------------------------------------------
+  # System health
+  # -------------------------------------------------------
+  - name: pa_system_alerts
+    rules:
+      - alert: SystemErrorsElevated
+        expr: pa_system_errors_active > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $value }} system infrastructure error(s) active"
+          description: >
+            Infrastructure health check failures detected (Redis/DB connectivity).
+            Application may be operating in degraded mode.
+
+      - alert: ActiveRequestsNone
+        expr: |
+          sum(pa_http_active_requests) == 0
+            and
+          sum(rate(http_request_duration_seconds_count[1m])) > 0
+        for: 5m
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "No active requests but traffic is flowing — gauge may be stuck"
+          description: >
+            Active request gauge reads 0 while traffic counter is non-zero.
+            Possible middleware error in gauge decrement.

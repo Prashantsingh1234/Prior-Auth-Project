@@ -1,0 +1,173 @@
+groups:
+  # -------------------------------------------------------
+  # API rate / error-rate pre-computations
+  # -------------------------------------------------------
+  - name: pa_api_rates
+    interval: 30s
+    rules:
+      # Request rate per route group (req/s over 5-minute window)
+      - record: pa:http_request_rate5m
+        expr: |
+          sum by (route_group) (
+            rate(http_request_duration_seconds_count[5m])
+          )
+
+      # Error rate — 5xx responses / total (5-minute window)
+      - record: pa:http_error_rate5m
+        expr: |
+          sum by (route_group) (
+            rate(pa_http_errors_total{error_category="server_error"}[5m])
+          )
+          /
+          clamp_min(
+            sum by (route_group) (
+              rate(http_request_duration_seconds_count[5m])
+            ),
+            0.001
+          )
+
+      # p50 / p95 / p99 API latency (all routes combined)
+      - record: pa:http_latency_p50_5m
+        expr: |
+          histogram_quantile(0.50,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: pa:http_latency_p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: pa:http_latency_p99_5m
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+  # -------------------------------------------------------
+  # LLM performance pre-computations
+  # -------------------------------------------------------
+  - name: pa_llm_rates
+    interval: 30s
+    rules:
+      # LLM p95 latency per operation
+      - record: pa:llm_latency_p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, operation) (
+              rate(pa_llm_latency_seconds_bucket[5m])
+            )
+          )
+
+      # LLM token consumption rate (tokens/s)
+      - record: pa:llm_token_rate5m
+        expr: |
+          sum by (operation, token_type) (
+            rate(pa_llm_tokens_total[5m])
+          )
+
+      # LLM error rate
+      - record: pa:llm_error_rate5m
+        expr: |
+          sum(rate(pa_llm_errors_total[5m]))
+
+      # OCR p95 confidence (use histogram_quantile approximation)
+      - record: pa:ocr_confidence_p05_5m
+        expr: |
+          histogram_quantile(0.05,
+            sum by (le, provider) (
+              rate(pa_ocr_confidence_score_bucket[5m])
+            )
+          )
+
+      # OCR fallback rate
+      - record: pa:ocr_fallback_rate5m
+        expr: |
+          sum(rate(pa_ocr_fallback_total[5m]))
+
+  # -------------------------------------------------------
+  # Retrieval performance
+  # -------------------------------------------------------
+  - name: pa_retrieval_rates
+    interval: 30s
+    rules:
+      - record: pa:retrieval_latency_p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, retrieval_type) (
+              rate(pa_retrieval_latency_seconds_bucket[5m])
+            )
+          )
+
+      - record: pa:retrieval_latency_p50_5m
+        expr: |
+          histogram_quantile(0.50,
+            sum by (le, retrieval_type) (
+              rate(pa_retrieval_latency_seconds_bucket[5m])
+            )
+          )
+
+  # -------------------------------------------------------
+  # PA decision / business rates
+  # -------------------------------------------------------
+  - name: pa_decision_rates
+    interval: 60s
+    rules:
+      # Decision rate per outcome (decisions/min)
+      - record: pa:decision_rate1m
+        expr: |
+          sum by (decision) (
+            rate(pa_decisions_total[1m])
+          ) * 60
+
+      # Approval rate = approvals / (approvals + denials)
+      - record: pa:approval_rate5m
+        expr: |
+          sum(rate(pa_decisions_total{decision="APPROVE"}[5m]))
+          /
+          clamp_min(
+            sum(rate(pa_decisions_total{decision=~"APPROVE|DENY"}[5m])),
+            0.001
+          )
+
+      # Denial rate
+      - record: pa:denial_rate5m
+        expr: |
+          sum(rate(pa_decisions_total{decision="DENY"}[5m]))
+          /
+          clamp_min(
+            sum(rate(pa_decisions_total{decision=~"APPROVE|DENY"}[5m])),
+            0.001
+          )
+
+      # Clarification frequency — fraction of loops that escalated
+      - record: pa:clarification_escalation_rate5m
+        expr: |
+          sum(rate(pa_clarification_escalations_total[5m]))
+          /
+          clamp_min(
+            sum(rate(pa_clarification_loops_total[5m])),
+            0.001
+          )
+
+  # -------------------------------------------------------
+  # Guardrail summary
+  # -------------------------------------------------------
+  - name: pa_guardrail_rates
+    interval: 30s
+    rules:
+      - record: pa:guardrail_violation_rate5m
+        expr: |
+          sum by (violation_type) (
+            rate(pa_guardrail_violations_total[5m])
+          )
+
+      - record: pa:guardrail_pass_rate5m
+        expr: |
+          sum(rate(pa_guardrail_outcomes_total{result="pass"}[5m]))
+          /
+          clamp_min(
+            sum(rate(pa_guardrail_outcomes_total[5m])),
+            0.001
+          )
