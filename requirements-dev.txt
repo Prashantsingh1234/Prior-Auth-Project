@@ -25,4 +25,4 @@ pre-commit==3.7.1
 # Type Stubs
 types-passlib==1.7.7.20240327
 types-python-jose==3.3.4.20240106
-types-pytz==2024.1.0.20240417
+types-pytz==2024.1.0.20240417                                                                                                                                                                                               

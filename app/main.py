@@ -39,6 +39,8 @@ from app.monitoring.metrics import setup_metrics
 from app.services.caching.redis_client import close_redis, init_redis
 from app.tracing.config import configure_langsmith
 from app.tracing.middleware import LangSmithTracingMiddleware
+from app.guardrails.middleware import GuardrailMiddleware
+from app.security.auth import auth_router, user_router
 
 logger = structlog.get_logger(__name__)
 
@@ -187,7 +189,8 @@ def create_application() -> FastAPI:
     #   4. RequestTracingMiddleware     — inject request_id / trace_id
     #   5. LangSmithTracingMiddleware   — propagate X-LangSmith-Run-ID contextvar
     #   6. AuditMiddleware              — bind AuditContext, emit API_REQUEST record
-    #   7. RequestLoggingMiddleware     — structured access logging
+    #   7. GuardrailMiddleware          — AI injection/jailbreak detection on HTTP bodies
+    #   8. RequestLoggingMiddleware     — structured access logging
     #
     # LangSmithTracingMiddleware sits after RequestTracingMiddleware so the
     # request already has a trace_id, and before AuditMiddleware so LangSmith
@@ -225,7 +228,10 @@ def create_application() -> FastAPI:
     # 6. Audit — binds AuditContext to contextvars for the full request duration
     app.add_middleware(AuditMiddleware)
 
-    # 7. Request/response logging — innermost, has full request context
+    # 7. AI guardrail middleware — scans POST/PUT/PATCH bodies for injection/jailbreak
+    app.add_middleware(GuardrailMiddleware)
+
+    # 8. Request/response logging — innermost, has full request context
     app.add_middleware(RequestLoggingMiddleware)
 
     # ----------------------------------------------------------
@@ -241,6 +247,10 @@ def create_application() -> FastAPI:
         prefix=settings.api_prefix,
         tags=["Health"],
     )
+
+    # Auth and user management
+    app.include_router(auth_router, prefix=settings.api_prefix)
+    app.include_router(user_router, prefix=settings.api_prefix)
 
     # Future module routers — uncomment as each module is implemented:
     # from app.api.routes import pa_request, cases, review, clarification
