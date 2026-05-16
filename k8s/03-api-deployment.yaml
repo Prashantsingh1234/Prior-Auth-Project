@@ -1,0 +1,174 @@
+﻿# k8s/03-api-deployment.yaml — FastAPI application deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pa-api
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pa-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # Zero-downtime: always have 'replicas' running
+  template:
+    metadata:
+      labels:
+        app: pa-api
+        app.kubernetes.io/name: pa-review-platform
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+        # Force pod restart on configmap/secret change
+        checksum/config: "REPLACE_WITH_CONFIGMAP_CHECKSUM"
+        checksum/secret: "REPLACE_WITH_SECRET_CHECKSUM"
+    spec:
+      serviceAccountName: pa-api-sa
+      terminationGracePeriodSeconds: 60
+
+      # ── Security context ───────────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Init container: run Alembic migrations once per deploy ─────────
+      initContainers:
+        - name: migrate
+          image: pa-review-platform:IMAGE_TAG_PLACEHOLDER
+          imagePullPolicy: Always
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: pa-platform-config
+            - secretRef:
+                name: pa-platform-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+
+      containers:
+        - name: pa-api
+          image: pa-review-platform:IMAGE_TAG_PLACEHOLDER
+          imagePullPolicy: Always
+          command: ["/bin/bash", "/app/docker/entrypoint.sh"]
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: pa-platform-config
+            - secretRef:
+                name: pa-platform-secrets
+          env:
+            - name: SKIP_MIGRATIONS
+              value: "true"        # migrations handled by initContainer
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          # ── Health checks ──────────────────────────────────────────────
+          startupProbe:
+            httpGet:
+              path: /api/v1/health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5        # 150s max startup time
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/live
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # ── Resources ──────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+
+          # ── Security ───────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # uploads need write access
+            capabilities:
+              drop: ["ALL"]
+
+          # ── Volume mounts ──────────────────────────────────────────────
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: uploads
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tmp
+          emptyDir: {}
+
+      # ── Node scheduling ────────────────────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pa-api
+                topologyKey: kubernetes.io/hostname
+
+      # Tolerate preemptible/spot nodes for non-critical replicas
+      tolerations:
+        - key: "spot"
+          operator: "Equal"
+          value: "true"
+          effect: "PreferNoSchedule"
+
+      imagePullSecrets:
+        - name: registry-credentials

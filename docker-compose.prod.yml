@@ -1,0 +1,182 @@
+﻿# docker-compose.prod.yml — Production overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences from base:
+#   - Builds from 'production' stage (not 'development')
+#   - No bind-mount source code (immutable container)
+#   - Gunicorn instead of Uvicorn (via entrypoint.sh)
+#   - Nginx reverse proxy in front of the API
+#   - Resource limits enforced
+#   - No management UIs exposed on public ports
+#   - Replicas ready for docker swarm / compose scale
+
+version: "3.9"
+
+services:
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: pa-nginx
+    networks:
+      - pa-network
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_certs:/etc/nginx/certs:ro
+      - nginx_html:/usr/share/nginx/html:ro
+    depends_on:
+      pa-api:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "128M"
+
+  # ── FastAPI — production build ─────────────────────────────────────────
+  pa-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+        GIT_SHA: "${GIT_SHA:-unknown}"
+    image: pa-review-platform:${IMAGE_TAG:-latest}
+    entrypoint: ["/bin/bash", "/app/docker/entrypoint.sh"]
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      LOG_FORMAT: json
+      SKIP_MIGRATIONS: "false"
+    # Remove dev port exposure — traffic comes only through nginx
+    ports: []
+    volumes: []
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "1G"
+        reservations:
+          cpus: "0.5"
+          memory: "256M"
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+
+  # ── Worker — production build ──────────────────────────────────────────
+  pa-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: pa-review-platform:${IMAGE_TAG:-latest}
+    entrypoint: ["/bin/bash", "/app/docker/entrypoint.sh"]
+    command: ["python", "-m", "app.queues.runner"]
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      LOG_FORMAT: json
+      WORKER_MODE: "true"
+      SKIP_MIGRATIONS: "true"
+    volumes: []
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+        reservations:
+          cpus: "0.25"
+          memory: "128M"
+
+  # ── MySQL — production hardening ──────────────────────────────────────
+  mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+    # No port exposure in production — access only via pa-network
+    ports: []
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--innodb-buffer-pool-size=1G"
+      - "--max-connections=500"
+      - "--slow-query-log=1"
+      - "--slow-query-log-file=/var/log/mysql/slow.log"
+      - "--long-query-time=2"
+      - "--general-log=0"
+      - "--ssl-mode=REQUIRED"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2G"
+
+  # ── Redis — production hardening ──────────────────────────────────────
+  redis:
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+
+  # ── RabbitMQ — no management UI in production ─────────────────────────
+  rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+    ports:
+      - "5672:5672"
+    # Disable management UI port in production
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+
+  # ── Prometheus — internal only ─────────────────────────────────────────
+  prometheus:
+    ports: []
+    restart: always
+
+  # ── Grafana — internal only (access via VPN/bastion) ──────────────────
+  grafana:
+    ports: []
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      GF_SERVER_DOMAIN: "${GRAFANA_DOMAIN:-localhost}"
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com:587}"
+      GF_SMTP_USER: "${SMTP_USER}"
+      GF_SMTP_PASSWORD: "${SMTP_PASSWORD}"
+      GF_SMTP_FROM_ADDRESS: "${SMTP_FROM:-alerts@pa-platform.internal}"
+    restart: always
+
+volumes:
+  nginx_certs:
+    name: pa_nginx_certs
+  nginx_html:
+    name: pa_nginx_html

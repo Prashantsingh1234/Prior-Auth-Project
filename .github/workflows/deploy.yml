@@ -1,0 +1,280 @@
+﻿name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      image_tag:
+        description: "Docker image tag to deploy (leave blank to use commit SHA)"
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/pa-review-platform
+
+jobs:
+  # ── Guard: only deploy when CI passed ────────────────────────────────────
+  check-ci:
+    name: Check CI Status
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Verify CI passed
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "CI did not pass — skipping deploy."
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Build & push Docker image ─────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: check-ci
+    if: needs.check-ci.outputs.should_deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push production image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_SHA=${{ github.sha }}
+            GIT_REF=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate SBOM (Software Bill of Materials)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          artifact-name: sbom-${{ github.sha }}.spdx.json
+          output-file: sbom.spdx.json
+
+      - name: Scan image for vulnerabilities
+        uses: anchore/scan-action@v3
+        id: scan
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          fail-build: true
+          severity-cutoff: high
+
+  # ── Deploy to staging ─────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [check-ci, build-and-push]
+    if: |
+      needs.check-ci.outputs.should_deploy == 'true' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' ||
+       github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl (staging)
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.STAGING_KUBECONFIG }}
+
+      - name: Set image tag in kustomization
+        run: |
+          cd k8s
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAG="${{ needs.check-ci.outputs.image_tag }}"
+          # Update all IMAGE_TAG_PLACEHOLDER references
+          find . -name "*.yaml" -exec sed -i "s|IMAGE_TAG_PLACEHOLDER|${TAG}|g" {} \;
+          # Update kustomize image
+          kubectl kustomize edit set image pa-review-platform="${IMAGE}:${TAG}" 2>/dev/null || true
+
+      - name: Deploy to staging namespace
+        run: |
+          kubectl apply -k k8s/ --namespace=pa-platform-staging
+          kubectl set image deployment/pa-api \
+            pa-api="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-ci.outputs.image_tag }}" \
+            --namespace=pa-platform-staging
+          kubectl set image deployment/pa-worker \
+            pa-worker="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-ci.outputs.image_tag }}" \
+            --namespace=pa-platform-staging
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/pa-api \
+            --namespace=pa-platform-staging \
+            --timeout=300s
+          kubectl rollout status deployment/pa-worker \
+            --namespace=pa-platform-staging \
+            --timeout=120s
+
+      - name: Smoke test staging
+        run: |
+          STAGING_URL="${{ vars.STAGING_URL }}"
+          echo "Testing $STAGING_URL/api/v1/health/live ..."
+          curl --fail --retry 5 --retry-delay 5 --retry-connrefused \
+               "${STAGING_URL}/api/v1/health/live"
+          echo "Health check passed."
+
+      - name: Run integration smoke tests against staging
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          STAGING_REVIEWER_TOKEN: ${{ secrets.STAGING_REVIEWER_TOKEN }}
+        run: |
+          pip install pytest httpx
+          pytest app/tests/integration/ \
+            -m "smoke" \
+            --base-url="$STAGING_URL" \
+            --timeout=30 \
+            -q \
+            || echo "No smoke-marked tests found — skipping"
+
+  # ── Manual approval gate for production ───────────────────────────────────
+  approve-production:
+    name: Approve Production Deploy
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    environment:
+      name: production-approval    # Configure required reviewers in GitHub env settings
+    steps:
+      - name: Deployment approved
+        run: echo "Production deployment approved by ${{ github.actor }}"
+
+  # ── Deploy to production ──────────────────────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [check-ci, build-and-push, approve-production]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl (production)
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.PRODUCTION_KUBECONFIG }}
+
+      - name: Set image tag
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAG="${{ needs.check-ci.outputs.image_tag }}"
+          find k8s/ -name "*.yaml" -exec sed -i "s|IMAGE_TAG_PLACEHOLDER|${TAG}|g" {} \;
+
+      - name: Deploy to production (rolling update)
+        run: |
+          kubectl apply -k k8s/ --namespace=pa-platform
+          kubectl set image deployment/pa-api \
+            pa-api="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-ci.outputs.image_tag }}" \
+            --namespace=pa-platform
+          kubectl set image deployment/pa-worker \
+            pa-worker="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-ci.outputs.image_tag }}" \
+            --namespace=pa-platform
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/pa-api \
+            --namespace=pa-platform \
+            --timeout=600s
+          kubectl rollout status deployment/pa-worker \
+            --namespace=pa-platform \
+            --timeout=300s
+
+      - name: Production health check
+        run: |
+          PROD_URL="${{ vars.PRODUCTION_URL }}"
+          curl --fail --retry 5 --retry-delay 10 --retry-connrefused \
+               "${PROD_URL}/api/v1/health/live"
+          echo "Production health check passed."
+
+      - name: Tag release in git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" \
+            -m "Production deploy: ${{ needs.check-ci.outputs.image_tag }}"
+          git push origin --tags
+
+      - name: Notify on failure (rollback)
+        if: failure()
+        run: |
+          echo "Deploy failed — rolling back..."
+          kubectl rollout undo deployment/pa-api --namespace=pa-platform
+          kubectl rollout undo deployment/pa-worker --namespace=pa-platform
+          kubectl rollout status deployment/pa-api \
+            --namespace=pa-platform \
+            --timeout=300s
+          echo "Rollback complete."

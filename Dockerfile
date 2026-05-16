@@ -34,9 +34,16 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ---- Stage 2: Production ----
 FROM python:3.11-slim AS production
 
+ARG BUILD_DATE=unknown
+ARG GIT_SHA=unknown
+ARG GIT_REF=unknown
+
 LABEL maintainer="Healthcare AI Team <ai@healthcare.internal>"
 LABEL version="0.1.0"
 LABEL description="AI-Assisted Prior Authorization Review Platform"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.ref.name="${GIT_REF}"
 
 WORKDIR /app
 
@@ -61,24 +68,21 @@ COPY --chown=appuser:appgroup . .
 # Create upload directory with proper permissions
 RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appgroup /app/uploads /app/logs
 
+# Make entrypoint executable
+RUN chmod +x /app/docker/entrypoint.sh
+
 # Switch to non-root user
 USER appuser
 
 # Expose application port
 EXPOSE 8000
 
-# Health check — polls the /health endpoint every 30s
+# Health check — polls the /health/live endpoint every 30s
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+    CMD curl -f http://localhost:8000/api/v1/health/live || exit 1
 
-# Default command — override with Gunicorn in production orchestration
-# Single worker here; Kubernetes handles horizontal scaling
-CMD ["uvicorn", "app.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--loop", "uvloop", \
-     "--log-config", "/dev/null"]
+# Entrypoint: runs migrations then starts Gunicorn
+ENTRYPOINT ["/bin/bash", "/app/docker/entrypoint.sh"]
 
 
 # ---- Stage 3: Development (optional override) ----

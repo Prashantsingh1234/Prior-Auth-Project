@@ -1,0 +1,109 @@
+﻿# k8s/06-hpa.yaml — Horizontal Pod Autoscalers
+# API: scale on CPU + memory
+# Worker: scale on RabbitMQ queue depth (requires KEDA or custom metrics adapter)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pa-api-hpa
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pa-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300     # 5-min cool-down before scaling down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pa-worker-hpa
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pa-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 600     # 10-min cool-down (finish in-flight tasks)
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+# PodDisruptionBudget: ensure at least 1 API pod is always available during node drains
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pa-api-pdb
+  namespace: pa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pa-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pa-worker-pdb
+  namespace: pa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pa-worker

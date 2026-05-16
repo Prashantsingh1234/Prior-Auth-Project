@@ -1,0 +1,114 @@
+﻿# k8s/05-worker-deployment.yaml — Async queue worker deployment
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pa-worker-sa
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: worker
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pa-worker
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pa-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: pa-worker
+        app.kubernetes.io/name: pa-review-platform
+        app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      serviceAccountName: pa-worker-sa
+      terminationGracePeriodSeconds: 120   # Finish in-flight tasks
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: pa-worker
+          image: pa-review-platform:IMAGE_TAG_PLACEHOLDER
+          imagePullPolicy: Always
+          command: ["python", "-m", "app.queues.runner"]
+
+          envFrom:
+            - configMapRef:
+                name: pa-platform-config
+            - secretRef:
+                name: pa-platform-secrets
+          env:
+            - name: WORKER_MODE
+              value: "true"
+            - name: SKIP_MIGRATIONS
+              value: "true"
+            - name: RABBITMQ_PREFETCH_COUNT
+              value: "5"
+            - name: WORKER_MAX_RETRIES
+              value: "3"
+
+          # Workers have no HTTP port — check via process liveness
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import app.queues.runner; print('alive')"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pa-worker
+                topologyKey: kubernetes.io/hostname
+
+      imagePullSecrets:
+        - name: registry-credentials

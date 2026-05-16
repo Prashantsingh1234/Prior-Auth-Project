@@ -1,0 +1,29 @@
+﻿# k8s/kustomization.yaml — Kustomize entry point
+# Apply all manifests: kubectl apply -k k8s/
+# Or target an overlay: kubectl apply -k k8s/overlays/staging/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pa-platform
+
+resources:
+  - 00-namespace.yaml
+  - 01-configmap.yaml
+  - 02-secret.yaml
+  - 03-api-deployment.yaml
+  - 04-api-service.yaml
+  - 05-worker-deployment.yaml
+  - 06-hpa.yaml
+  - 07-ingress.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: pa-review-platform
+  app.kubernetes.io/managed-by: kustomize
+
+# Images — override tag at deploy time:
+#   kustomize edit set image pa-review-platform=ghcr.io/your-org/pa-platform:v1.2.3
+images:
+  - name: pa-review-platform
+    newName: ghcr.io/your-org/pa-review-platform
+    newTag: latest

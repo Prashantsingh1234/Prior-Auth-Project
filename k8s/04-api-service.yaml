@@ -1,0 +1,54 @@
+﻿# k8s/04-api-service.yaml — Service + ServiceAccount for the API
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pa-api-sa
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: api
+  annotations:
+    # AWS EKS IRSA (IAM Roles for Service Accounts) — optional
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/pa-api-role
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pa-api
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  selector:
+    app: pa-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Headless service for direct pod DNS (useful for debugging)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pa-api-headless
+  namespace: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: pa-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -1,0 +1,13 @@
+﻿# k8s/00-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pa-platform
+  labels:
+    app.kubernetes.io/name: pa-review-platform
+    environment: production
+    # Pod Security Standards — restrict privileges
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
