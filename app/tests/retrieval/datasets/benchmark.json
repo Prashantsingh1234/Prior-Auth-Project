@@ -1,0 +1,180 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark dataset for hybrid policy retrieval evaluation. Each entry has a clinical query and the expected relevant policy chunk IDs ranked by relevance.",
+  "queries": [
+    {
+      "query_id": "Q001",
+      "query": "continuous glucose monitor coverage criteria type 2 diabetes HbA1c",
+      "cpt_codes": ["95249", "95250"],
+      "icd_codes": ["E11.9", "E11.65"],
+      "relevant_chunk_ids": ["chunk_cgm_001", "chunk_cgm_002", "chunk_cgm_003"],
+      "expected_top_k": ["chunk_cgm_001", "chunk_cgm_002"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.75,
+      "category": "diabetes_management",
+      "difficulty": "medium"
+    },
+    {
+      "query_id": "Q002",
+      "query": "MRI brain medically necessary multiple sclerosis diagnosis confirmation",
+      "cpt_codes": ["70553"],
+      "icd_codes": ["G35"],
+      "relevant_chunk_ids": ["chunk_mri_001", "chunk_mri_002", "chunk_neuro_001"],
+      "expected_top_k": ["chunk_mri_001", "chunk_neuro_001"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.70,
+      "category": "neurological_imaging",
+      "difficulty": "easy"
+    },
+    {
+      "query_id": "Q003",
+      "query": "total knee replacement osteoarthritis conservative treatment failed",
+      "cpt_codes": ["27447"],
+      "icd_codes": ["M17.11", "M17.12"],
+      "relevant_chunk_ids": ["chunk_knee_001", "chunk_knee_002", "chunk_ortho_001", "chunk_ortho_002"],
+      "expected_top_k": ["chunk_knee_001", "chunk_ortho_001"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.72,
+      "category": "orthopedic_surgery",
+      "difficulty": "hard"
+    },
+    {
+      "query_id": "Q004",
+      "query": "adalimumab rheumatoid arthritis DMARD failure methotrexate",
+      "cpt_codes": ["J0135"],
+      "icd_codes": ["M05.79", "M06.09"],
+      "relevant_chunk_ids": ["chunk_biologic_001", "chunk_biologic_002", "chunk_ra_001"],
+      "expected_top_k": ["chunk_biologic_001", "chunk_ra_001"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.80,
+      "category": "specialty_medication",
+      "difficulty": "medium"
+    },
+    {
+      "query_id": "Q005",
+      "query": "cardiac catheterization coronary artery disease chest pain diagnosis",
+      "cpt_codes": ["93454", "93455"],
+      "icd_codes": ["I25.10", "R07.9"],
+      "relevant_chunk_ids": ["chunk_cardiac_001", "chunk_cardiac_002"],
+      "expected_top_k": ["chunk_cardiac_001"],
+      "minimum_precision_at_3": 0.50,
+      "minimum_ndcg_at_5": 0.65,
+      "category": "cardiac_procedure",
+      "difficulty": "medium"
+    },
+    {
+      "query_id": "Q006",
+      "query": "home health nursing visit wound care post-surgical",
+      "cpt_codes": ["G0154"],
+      "icd_codes": ["Z48.00", "T81.30XA"],
+      "relevant_chunk_ids": ["chunk_home_001", "chunk_wound_001"],
+      "expected_top_k": ["chunk_home_001"],
+      "minimum_precision_at_3": 0.50,
+      "minimum_ndcg_at_5": 0.60,
+      "category": "home_health",
+      "difficulty": "easy"
+    },
+    {
+      "query_id": "Q007",
+      "query": "spinal cord stimulator chronic back pain failed surgery syndrome",
+      "cpt_codes": ["63650", "63685"],
+      "icd_codes": ["M54.5", "G89.29"],
+      "relevant_chunk_ids": ["chunk_scs_001", "chunk_scs_002", "chunk_pain_001"],
+      "expected_top_k": ["chunk_scs_001", "chunk_scs_002"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.78,
+      "category": "pain_management",
+      "difficulty": "hard"
+    },
+    {
+      "query_id": "Q008",
+      "query": "CPAP obstructive sleep apnea AHI polysomnography",
+      "cpt_codes": ["E0601"],
+      "icd_codes": ["G47.33"],
+      "relevant_chunk_ids": ["chunk_cpap_001", "chunk_sleep_001"],
+      "expected_top_k": ["chunk_cpap_001"],
+      "minimum_precision_at_3": 0.67,
+      "minimum_ndcg_at_5": 0.70,
+      "category": "durable_medical_equipment",
+      "difficulty": "easy"
+    }
+  ],
+  "policy_chunks": [
+    {
+      "chunk_id": "chunk_cgm_001",
+      "policy_id": "POL-DM-001",
+      "text": "Continuous glucose monitors (CGM) are covered for members with Type 1 or Type 2 diabetes who meet ALL of the following criteria: (1) diagnosis of diabetes mellitus documented by treating physician, (2) HbA1c > 7.0% on most recent test within 6 months, (3) currently prescribed insulin or at high risk for hypoglycemia, (4) member demonstrates willingness to use the CGM as directed.",
+      "section": "Coverage Criteria",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_cgm_002",
+      "policy_id": "POL-DM-001",
+      "text": "Continuous glucose monitor insertion (CPT 95249) and training (CPT 95250) are covered when the member has documented Type 2 diabetes with HbA1c ≥ 7.5% and is on insulin therapy. Documentation must include: most recent HbA1c value, current medication list, and physician attestation of medical necessity.",
+      "section": "Documentation Requirements",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_cgm_003",
+      "policy_id": "POL-DM-001",
+      "text": "CGM devices are NOT covered as a standalone monitoring tool for pre-diabetes (prediabetes) or for routine glucose monitoring in members not on insulin. A standard glucose meter is the appropriate first-line monitoring device for these members.",
+      "section": "Exclusions",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_mri_001",
+      "policy_id": "POL-IMG-003",
+      "text": "MRI of the brain without and with contrast (CPT 70553) is covered for the initial diagnosis and follow-up monitoring of demyelinating diseases including multiple sclerosis (MS). Coverage requires documented neurological symptoms consistent with MS, prior abnormal neurological examination findings, and ordering by a neurologist.",
+      "section": "Coverage Criteria",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_mri_002",
+      "policy_id": "POL-IMG-003",
+      "text": "Repeat brain MRI for established MS patients is covered every 12 months for routine monitoring, or sooner if there is clinical evidence of disease progression, new symptoms, or change in treatment plan.",
+      "section": "Frequency Limitations",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_neuro_001",
+      "policy_id": "POL-NEURO-001",
+      "text": "Neurological imaging studies are considered medically necessary when ordered by a board-certified neurologist and supported by documented clinical findings. The clinical indication must be documented in the treating physician's notes within the past 90 days.",
+      "section": "General Neurological Coverage",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_knee_001",
+      "policy_id": "POL-ORTH-002",
+      "text": "Total knee arthroplasty (CPT 27447) is covered when ALL criteria are met: (1) radiographic evidence of moderate-to-severe osteoarthritis (Kellgren-Lawrence Grade 3 or 4), (2) documented failure of at least 3 months of conservative treatment including physical therapy and NSAIDs, (3) functional limitation significantly impacting activities of daily living, (4) BMI < 40 or documented surgical clearance.",
+      "section": "Coverage Criteria",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_knee_002",
+      "policy_id": "POL-ORTH-002",
+      "text": "Documentation required for total knee replacement authorization: operative report from orthopedic surgeon, X-rays confirming joint space narrowing, physical therapy notes documenting treatment duration and outcomes, and pre-operative medical clearance.",
+      "section": "Documentation Requirements",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_biologic_001",
+      "policy_id": "POL-MED-007",
+      "text": "Adalimumab (Humira) and biosimilars for rheumatoid arthritis are covered when: (1) diagnosis of moderate-to-severe RA confirmed by rheumatologist, (2) documented failure or intolerance to at least one conventional DMARD (methotrexate, hydroxychloroquine, or sulfasalazine) at adequate dose for ≥ 3 months, (3) active disease evidenced by elevated CRP/ESR or swollen joint count ≥ 6.",
+      "section": "Coverage Criteria",
+      "effective_date": "2024-01-01"
+    },
+    {
+      "chunk_id": "chunk_cpap_001",
+      "policy_id": "POL-DME-001",
+      "text": "CPAP therapy (E0601) is covered for obstructive sleep apnea (OSA) when: polysomnography (sleep study) documents AHI ≥ 15 events/hour, or AHI ≥ 5 with documented symptoms of excessive daytime sleepiness, impaired cognition, or documented cardiovascular disease. Initial 90-day trial required before continued coverage.",
+      "section": "Coverage Criteria",
+      "effective_date": "2024-01-01"
+    }
+  ],
+  "evaluation_thresholds": {
+    "minimum_precision_at_3": 0.60,
+    "minimum_ndcg_at_5": 0.65,
+    "minimum_recall_at_5": 0.70,
+    "target_latency_ms": 500
+  }
+}

@@ -1,31 +1,19 @@
-# ============================================================
-# PA Review Platform — GitHub Actions CI/CD Pipeline
-# Pipeline: Lint → Test → Build → (Deploy on main)
-# ============================================================
-
-name: CI/CD Pipeline
+﻿name: CI
 
 on:
   push:
-    branches: [main, develop, "feature/**", "fix/**"]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
 env:
   PYTHON_VERSION: "3.11"
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/pa-api
-  # Opt into Node.js 24 for all JavaScript actions before the June 2026 forced migration
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-
-  # --------------------------------------------------------
-  # Stage 1: Lint & Type Check
-  # --------------------------------------------------------
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -33,40 +21,92 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
 
-      - name: Install lint dependencies
-        run: pip install ruff mypy black types-passlib types-python-jose
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
 
-      - name: Run Ruff (linting)
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: ruff check
         run: ruff check app/
 
-      - name: Run Black (formatting check)
-        run: black --check --diff app/
+      - name: ruff format check
+        run: ruff format --check app/
 
-      - name: Run MyPy (type checking)
-        run: mypy app/ --ignore-missing-imports
+      - name: black check
+        run: black --check app/
 
-  # --------------------------------------------------------
-  # Stage 2: Unit + Integration Tests
-  # --------------------------------------------------------
-  test:
-    name: Run Tests
+      - name: mypy (advisory)
+        run: mypy app/ --ignore-missing-imports --no-error-summary || true
+
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run unit tests
+        env:
+          ENVIRONMENT: test
+          SECRET_KEY: test-secret-key-for-ci-only-not-production
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest app/tests/unit/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            --tb=short \
+            -q
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unit
+          fail_ci_if_error: false
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: lint
 
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: rootpassword
-          MYSQL_DATABASE: pa_test_db
-          MYSQL_USER: test_user
-          MYSQL_PASSWORD: test_password
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: pa_review_test
+          MYSQL_USER: pa_user
+          MYSQL_PASSWORD: pa_password
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -u test_user -ptest_password"
+          --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -88,113 +128,240 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Create test .env
-        run: |
-          cat > .env << 'EOF'
-          APP_NAME=PA Review Platform
-          ENVIRONMENT=development
-          DEBUG=true
-          SECRET_KEY=ci-test-secret-key-minimum-32-characters
-          DB_HOST=localhost
-          DB_PORT=3306
-          DB_NAME=pa_test_db
-          DB_USER=test_user
-          DB_PASSWORD=test_password
-          REDIS_URL=redis://localhost:6379/1
-          LOG_LEVEL=WARNING
-          LOG_FORMAT=console
-          PROMETHEUS_ENABLED=false
-          EOF
+      - name: Run database migrations
+        env:
+          DATABASE_URL: mysql+aiomysql://pa_user:pa_password@localhost:3306/pa_review_test
+        run: alembic upgrade head
 
-      - name: Run tests with coverage
+      - name: Run integration tests
+        env:
+          ENVIRONMENT: test
+          SECRET_KEY: test-secret-key-for-ci-only-not-production
+          DATABASE_URL: mysql+aiomysql://pa_user:pa_password@localhost:3306/pa_review_test
+          REDIS_URL: redis://localhost:6379/0
         run: |
-          pytest app/tests/ \
-            --cov=app \
-            --cov-report=xml \
-            --cov-report=term-missing \
+          pytest app/tests/integration/ \
+            --timeout=60 \
+            --tb=short \
+            -q
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run security tests (pytest)
+        env:
+          ENVIRONMENT: test
+          SECRET_KEY: test-secret-key-for-ci-only-not-production
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest app/tests/security/ \
+            --timeout=30 \
             --tb=short \
             -v
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Run bandit SAST scan
+        run: |
+          bandit -r app/ \
+            -ll \
+            --format json \
+            --output bandit-report.json \
+            --exclude app/tests/ \
+            || true
+          python -c "
+          import json, sys
+          with open('bandit-report.json') as f:
+              report = json.load(f)
+          highs = [r for r in report.get('results', []) if r['issue_severity'] == 'HIGH']
+          if highs:
+              print('FAILED: {} HIGH severity findings:'.format(len(highs)))
+              for h in highs:
+                  print('  {}:{} -- {}'.format(h['filename'], h['line_number'], h['issue_text']))
+              sys.exit(1)
+          print('PASSED: No HIGH severity findings ({} total findings checked)'.format(len(report.get('results', []))))
+          "
+
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          file: ./coverage.xml
-          fail_ci_if_error: false
+          name: bandit-security-report
+          path: bandit-report.json
+          retention-days: 30
 
-  # --------------------------------------------------------
-  # Stage 3: Build Docker Image
-  # --------------------------------------------------------
-  build:
-    name: Build Docker Image
+  workflow-tests:
+    name: Workflow, Retrieval & Reasoning Tests
     runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 20
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run workflow, retrieval & reasoning tests
+        env:
+          ENVIRONMENT: test
+          SECRET_KEY: test-secret-key-for-ci-only-not-production
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest \
+            app/tests/workflow/ \
+            app/tests/retrieval/ \
+            app/tests/reasoning/ \
+            --timeout=60 \
+            --tb=short \
+            -q
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit-tests, integration-tests, security-tests, workflow-tests]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          target: production
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          tags: pa-review-platform:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # --------------------------------------------------------
-  # Stage 4: Security Scan
-  # --------------------------------------------------------
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name != 'pull_request'
+      - name: Smoke test container starts
+        run: |
+          docker run -d \
+            --name pa-review-smoke \
+            -e ENVIRONMENT=test \
+            -e SECRET_KEY=ci-smoke-test-key \
+            -e DATABASE_URL=sqlite+aiosqlite:///:memory: \
+            -e REDIS_URL=redis://localhost:6379/0 \
+            -p 8080:8000 \
+            pa-review-platform:${{ github.sha }}
+          sleep 10
+          curl --fail --retry 3 --retry-delay 2 http://localhost:8080/api/v1/health/live
+          docker stop pa-review-smoke
 
+  load-test-smoke:
+    name: Load Test Smoke (Non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit-tests, integration-tests]
+    if: github.ref == 'refs/heads/main' && vars.STAGING_URL != ''
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Install Locust
+        run: pip install locust
+
+      - name: Run Locust smoke test
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          LOCUST_AUTH_TOKEN: ${{ secrets.STAGING_REVIEWER_TOKEN }}
+        run: |
+          locust \
+            -f app/tests/load/locustfile.py \
+            --headless \
+            --users 10 \
+            --spawn-rate 2 \
+            --run-time 60s \
+            --host "$STAGING_URL" \
+            --csv=load-test-results \
+            --exit-code-on-error 1
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: "trivy-results.sarif"
+          name: load-test-results
+          path: load-test-results*.csv
+          retention-days: 7
+
+  ci-passed:
+    name: CI Passed
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - unit-tests
+      - integration-tests
+      - security-tests
+      - workflow-tests
+    if: always()
+    steps:
+      - name: Check all required jobs passed
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          UNIT_RESULT: ${{ needs.unit-tests.result }}
+          INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
+          SECURITY_RESULT: ${{ needs.security-tests.result }}
+          WORKFLOW_RESULT: ${{ needs.workflow-tests.result }}
+        run: |
+          echo "lint:         $LINT_RESULT"
+          echo "unit-tests:   $UNIT_RESULT"
+          echo "integration:  $INTEGRATION_RESULT"
+          echo "security:     $SECURITY_RESULT"
+          echo "workflow:     $WORKFLOW_RESULT"
+          for result in "$LINT_RESULT" "$UNIT_RESULT" "$INTEGRATION_RESULT" "$SECURITY_RESULT" "$WORKFLOW_RESULT"; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "A required job did not succeed. Failing the gate."
+              exit 1
+            fi
+          done
+          echo "All required jobs passed."

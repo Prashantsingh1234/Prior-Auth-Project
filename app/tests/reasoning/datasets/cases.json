@@ -1,0 +1,173 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark cases for AI reasoning engine evaluation. Each case has clinical data and an expected decision outcome.",
+  "cases": [
+    {
+      "case_id": "TEST-APPROVE-001",
+      "label": "CGM clearly meets all criteria",
+      "expected_outcome": "APPROVE",
+      "expected_confidence_min": 0.85,
+      "cpt_codes": ["95249"],
+      "icd_codes": ["E11.9"],
+      "clinical_notes": "Patient is a 52-year-old female with Type 2 Diabetes Mellitus diagnosed 4 years ago. Current HbA1c: 9.2%. Currently on basal-bolus insulin regimen (Lantus 30 units QHS + Humalog sliding scale). Frequent hypoglycemic episodes requiring emergency visits (3 in past 6 months). Endocrinologist recommends CGM to improve glycemic control and reduce hypoglycemia risk. Patient is motivated and willing to use the device.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "E11.9", "confidence": 0.98},
+        {"entity_type": "LAB_VALUE", "entity_value": "HbA1c 9.2%", "confidence": 0.95},
+        {"entity_type": "MEDICATION", "entity_value": "Lantus insulin", "confidence": 0.97},
+        {"entity_type": "MEDICATION", "entity_value": "Humalog insulin", "confidence": 0.96}
+      ],
+      "policy_criteria": [
+        {"criterion": "diabetes_diagnosis", "status": "PASS", "evidence": "E11.9 confirmed"},
+        {"criterion": "hba1c_threshold", "status": "PASS", "evidence": "HbA1c 9.2% > 7.0%"},
+        {"criterion": "insulin_therapy", "status": "PASS", "evidence": "On basal-bolus insulin"},
+        {"criterion": "hypoglycemia_risk", "status": "PASS", "evidence": "3 emergency visits for hypoglycemia"}
+      ],
+      "all_criteria_met": true,
+      "category": "diabetes_management",
+      "difficulty": "easy"
+    },
+    {
+      "case_id": "TEST-DENY-001",
+      "label": "CGM requested for pre-diabetes, not covered",
+      "expected_outcome": "DENY",
+      "expected_confidence_min": 0.82,
+      "cpt_codes": ["95249"],
+      "icd_codes": ["R73.09"],
+      "clinical_notes": "Patient is a 38-year-old male with pre-diabetes (ICD-10: R73.09). HbA1c: 6.3%. Not on insulin or any diabetes medications. No documented hypoglycemic episodes. Primary care physician requests CGM for 'better glucose tracking'. Patient not diagnosed with Type 1 or Type 2 diabetes.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "R73.09", "confidence": 0.97},
+        {"entity_type": "LAB_VALUE", "entity_value": "HbA1c 6.3%", "confidence": 0.94}
+      ],
+      "policy_criteria": [
+        {"criterion": "diabetes_diagnosis", "status": "FAIL", "evidence": "Pre-diabetes, not Type 1 or Type 2 DM"},
+        {"criterion": "hba1c_threshold", "status": "FAIL", "evidence": "HbA1c 6.3% < 7.0%"},
+        {"criterion": "insulin_therapy", "status": "FAIL", "evidence": "Not on insulin therapy"},
+        {"criterion": "hypoglycemia_risk", "status": "FAIL", "evidence": "No documented hypoglycemic episodes"}
+      ],
+      "all_criteria_met": false,
+      "denial_reason": "CGM not covered for pre-diabetes. Policy requires Type 1 or Type 2 diabetes diagnosis with HbA1c > 7.0% and insulin therapy.",
+      "category": "diabetes_management",
+      "difficulty": "easy"
+    },
+    {
+      "case_id": "TEST-PEND-001",
+      "label": "Knee replacement - missing physical therapy documentation",
+      "expected_outcome": "PEND",
+      "expected_confidence_min": 0.70,
+      "cpt_codes": ["27447"],
+      "icd_codes": ["M17.11"],
+      "clinical_notes": "Patient is a 67-year-old male requesting total knee replacement for right knee osteoarthritis. X-rays show KL Grade 3 changes. Patient reports significant pain and functional limitation. However, no formal physical therapy records included in submission. Surgeon's note mentions 'patient tried conservative treatment' without specific documentation.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "M17.11", "confidence": 0.96},
+        {"entity_type": "PROCEDURE_CODE", "entity_value": "27447", "confidence": 0.99}
+      ],
+      "policy_criteria": [
+        {"criterion": "radiographic_evidence", "status": "PASS", "evidence": "KL Grade 3 confirmed by X-ray"},
+        {"criterion": "conservative_treatment_failure", "status": "INSUFFICIENT_EVIDENCE", "evidence": "No PT records included"},
+        {"criterion": "functional_limitation", "status": "PASS", "evidence": "Patient-reported limitation"},
+        {"criterion": "bmi_clearance", "status": "INSUFFICIENT_EVIDENCE", "evidence": "BMI not documented"}
+      ],
+      "missing_documentation": ["physical_therapy_notes", "bmi_documentation"],
+      "all_criteria_met": false,
+      "category": "orthopedic_surgery",
+      "difficulty": "medium"
+    },
+    {
+      "case_id": "TEST-APPROVE-002",
+      "label": "MRI brain for MS monitoring - clearly appropriate",
+      "expected_outcome": "APPROVE",
+      "expected_confidence_min": 0.88,
+      "cpt_codes": ["70553"],
+      "icd_codes": ["G35"],
+      "clinical_notes": "Patient is a 34-year-old female with established diagnosis of relapsing-remitting multiple sclerosis (RRMS) diagnosed 2 years ago. Currently on Ocrelizumab. Neurologist requests annual brain MRI to monitor disease progression. Last MRI was 14 months ago (exceeds 12-month monitoring interval). No new symptoms but routine monitoring indicated per MS Society guidelines.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "G35", "confidence": 0.99},
+        {"entity_type": "MEDICATION", "entity_value": "Ocrelizumab", "confidence": 0.95}
+      ],
+      "policy_criteria": [
+        {"criterion": "ms_diagnosis", "status": "PASS", "evidence": "RRMS confirmed"},
+        {"criterion": "neurologist_ordering", "status": "PASS", "evidence": "Ordered by neurologist"},
+        {"criterion": "monitoring_interval", "status": "PASS", "evidence": "14 months since last MRI > 12 month minimum"},
+        {"criterion": "clinical_indication", "status": "PASS", "evidence": "Routine annual MS monitoring"}
+      ],
+      "all_criteria_met": true,
+      "category": "neurological_imaging",
+      "difficulty": "easy"
+    },
+    {
+      "case_id": "TEST-DENY-002",
+      "label": "Biologic requested without DMARD failure",
+      "expected_outcome": "DENY",
+      "expected_confidence_min": 0.87,
+      "cpt_codes": ["J0135"],
+      "icd_codes": ["M05.79"],
+      "clinical_notes": "Patient is a 45-year-old female with rheumatoid arthritis (seropositive). Rheumatologist requests adalimumab as first-line therapy. No prior DMARD therapy documented. Disease Activity Score (DAS28) = 4.2 (moderate). Patient prefers to start with a biologic rather than conventional therapy.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "M05.79", "confidence": 0.96},
+        {"entity_type": "LAB_VALUE", "entity_value": "DAS28 4.2", "confidence": 0.88}
+      ],
+      "policy_criteria": [
+        {"criterion": "ra_diagnosis", "status": "PASS", "evidence": "Seropositive RA confirmed"},
+        {"criterion": "dmard_failure", "status": "FAIL", "evidence": "No prior DMARD therapy documented"},
+        {"criterion": "disease_activity", "status": "PASS", "evidence": "DAS28 4.2 indicates moderate disease"}
+      ],
+      "all_criteria_met": false,
+      "denial_reason": "Step therapy required. Must demonstrate failure or intolerance to at least one conventional DMARD before biologic therapy.",
+      "category": "specialty_medication",
+      "difficulty": "medium"
+    },
+    {
+      "case_id": "TEST-APPROVE-003",
+      "label": "CPAP for moderate OSA with daytime symptoms",
+      "expected_outcome": "APPROVE",
+      "expected_confidence_min": 0.90,
+      "cpt_codes": ["E0601"],
+      "icd_codes": ["G47.33"],
+      "clinical_notes": "Patient is a 51-year-old male with documented obstructive sleep apnea. Polysomnography report: AHI = 22 events/hour (moderate OSA). Symptoms include excessive daytime sleepiness (Epworth score 14/24), non-restorative sleep, and morning headaches. Sleep specialist recommends CPAP therapy.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "G47.33", "confidence": 0.99},
+        {"entity_type": "LAB_VALUE", "entity_value": "AHI 22 events/hour", "confidence": 0.95},
+        {"entity_type": "LAB_VALUE", "entity_value": "Epworth score 14", "confidence": 0.90}
+      ],
+      "policy_criteria": [
+        {"criterion": "polysomnography_documented", "status": "PASS", "evidence": "PSG confirms AHI 22"},
+        {"criterion": "ahi_threshold", "status": "PASS", "evidence": "AHI 22 > 15 events/hour"},
+        {"criterion": "symptom_documentation", "status": "PASS", "evidence": "Epworth 14, daytime sleepiness documented"}
+      ],
+      "all_criteria_met": true,
+      "category": "durable_medical_equipment",
+      "difficulty": "easy"
+    },
+    {
+      "case_id": "TEST-ESCALATE-001",
+      "label": "Spinal cord stimulator - contradictory clinical evidence",
+      "expected_outcome": "ESCALATE",
+      "expected_confidence_min": 0.55,
+      "cpt_codes": ["63650", "63685"],
+      "icd_codes": ["M54.5", "G89.29"],
+      "clinical_notes": "Patient is a 58-year-old male with failed back surgery syndrome and chronic low back pain for 8 years. Pain management physician recommends spinal cord stimulator implant. Previous trial stimulator showed 60% pain reduction (meets >50% threshold). However, psychiatric evaluation notes active major depressive disorder and opioid use disorder in partial remission. Social history indicates multiple prior authorizations denied by other insurers. Complex case with conflicting factors.",
+      "extracted_entities": [
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "M54.5", "confidence": 0.96},
+        {"entity_type": "DIAGNOSIS_CODE", "entity_value": "G89.29", "confidence": 0.92},
+        {"entity_type": "COMPLICATION", "entity_value": "active major depressive disorder", "confidence": 0.85},
+        {"entity_type": "COMPLICATION", "entity_value": "opioid use disorder", "confidence": 0.88}
+      ],
+      "policy_criteria": [
+        {"criterion": "chronic_pain_diagnosis", "status": "PASS", "evidence": "8 years documented chronic pain"},
+        {"criterion": "trial_stimulator_success", "status": "PASS", "evidence": "60% pain reduction on trial"},
+        {"criterion": "psychiatric_clearance", "status": "FAIL", "evidence": "Active MDD and OUD"},
+        {"criterion": "failed_conservative_treatment", "status": "PASS", "evidence": "Failed multiple conservative approaches"}
+      ],
+      "conflicting_factors": ["psychiatric_contraindication", "positive_trial_result"],
+      "all_criteria_met": false,
+      "category": "pain_management",
+      "difficulty": "hard"
+    }
+  ],
+  "evaluation_thresholds": {
+    "minimum_decision_accuracy": 0.85,
+    "minimum_confidence_on_correct_decisions": 0.80,
+    "maximum_false_approval_rate": 0.05,
+    "maximum_false_denial_rate": 0.10
+  }
+}

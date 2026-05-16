@@ -28,7 +28,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config.settings import Settings, get_settings
-from app.db.session.database import get_db
+from app.api.dependencies.database import get_db_session
 from app.services.caching.redis_client import get_redis
 
 
@@ -129,7 +129,7 @@ def app_with_overrides(mock_db_session: AsyncMock, mock_redis_client: AsyncMock)
     def override_get_redis() -> AsyncMock:
         return mock_redis_client
 
-    test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db_session] = override_get_db
     test_app.dependency_overrides[get_redis] = override_get_redis
 
     return test_app
