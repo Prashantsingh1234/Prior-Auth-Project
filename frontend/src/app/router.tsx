@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { ROUTES, ROLE_HOME } from '@/config/routes.config'
 import { useAuthStore } from '@/store'
@@ -15,6 +15,7 @@ const ForgotPasswordPage  = lazy(() => import('@/features/auth/pages/ForgotPassw
 const OTPVerificationPage = lazy(() => import('@/features/auth/pages/OTPVerificationPage').then((m) => ({ default: m.OTPVerificationPage })))
 const MFAPage             = lazy(() => import('@/features/auth/pages/MFAPage').then((m) => ({ default: m.MFAPage })))
 
+const DashboardPage       = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const CaseListPage        = lazy(() => import('@/features/cases/pages/CaseListPage').then((m) => ({ default: m.CaseListPage })))
 const ReviewPage          = lazy(() => import('@/features/review/pages/ReviewPage').then((m) => ({ default: m.ReviewPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
@@ -107,7 +108,7 @@ export function AppRouter() {
             {/* Dashboard — all authenticated roles */}
             <Route
               path={ROUTES.DASHBOARD}
-              element={<Page><CaseListPage /></Page>}
+              element={<Page><DashboardPage /></Page>}
             />
 
             {/* Cases list */}
