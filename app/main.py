@@ -252,12 +252,12 @@ def create_application() -> FastAPI:
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(user_router, prefix=settings.api_prefix)
 
-    # Future module routers — uncomment as each module is implemented:
-    # from app.api.routes import pa_request, cases, review, clarification
-    # app.include_router(pa_request.router, prefix=settings.api_prefix, tags=["PA Requests"])
-    # app.include_router(cases.router, prefix=settings.api_prefix, tags=["Cases"])
-    # app.include_router(review.router, prefix=settings.api_prefix, tags=["Review"])
-    # app.include_router(clarification.router, prefix=settings.api_prefix, tags=["Clarification"])
+    from app.api.routes import pa_requests, cases, review, clarification, metrics as metrics_router
+    app.include_router(pa_requests.router, prefix=settings.api_prefix)
+    app.include_router(cases.router, prefix=settings.api_prefix)
+    app.include_router(review.router, prefix=settings.api_prefix)
+    app.include_router(clarification.router, prefix=settings.api_prefix)
+    app.include_router(metrics_router.router, prefix=settings.api_prefix)
 
     return app
 

@@ -354,6 +354,62 @@ REASONING_CONFIDENCE_SCORE = Histogram(
 )
 
 
+# API Route metrics
+PA_REQUESTS_SUBMITTED_TOTAL = Counter(
+    name="pa_requests_submitted_total",
+    documentation="PA requests submitted via API by service type, priority, and channel",
+    labelnames=["service_type", "priority", "channel"],
+)
+
+CASE_VIEWS_TOTAL = Counter(
+    name="pa_case_views_total",
+    documentation="Case detail views by case status",
+    labelnames=["status"],
+)
+
+DOCUMENTS_UPLOADED_TOTAL = Counter(
+    name="pa_documents_uploaded_total",
+    documentation="Documents uploaded by document type and content type",
+    labelnames=["document_type", "content_type"],
+)
+
+DOCUMENT_SIZE_BYTES = Histogram(
+    name="pa_document_size_bytes",
+    documentation="Uploaded document size in bytes by document type",
+    labelnames=["document_type"],
+    buckets=[1024, 10240, 102400, 512000, 1048576, 5242880, 10485760, 26214400],
+)
+
+DOCUMENT_DOWNLOADS_TOTAL = Counter(
+    name="pa_document_downloads_total",
+    documentation="Document downloads by document type",
+    labelnames=["document_type"],
+)
+
+REVIEW_DECISIONS_TOTAL = Counter(
+    name="pa_review_decisions_total",
+    documentation="Human reviewer decisions by outcome and decision source",
+    labelnames=["outcome", "source"],
+)
+
+REVIEW_ESCALATIONS_TOTAL = Counter(
+    name="pa_review_escalations_total",
+    documentation="Manual escalations by whether a target reviewer was specified",
+    labelnames=["has_target"],
+)
+
+CLARIFICATION_EXHAUSTED_TOTAL = Counter(
+    name="pa_clarification_exhausted_total",
+    documentation="Cases auto-escalated after exhausting maximum clarification attempts",
+)
+
+CLARIFICATION_RESPONSES_TOTAL = Counter(
+    name="pa_clarification_responses_total",
+    documentation="Clarification responses submitted, labelled by resulting case status",
+    labelnames=["case_status"],
+)
+
+
 class PAMetrics:
     """
     Convenience wrapper giving attribute-style access to all metrics.
@@ -417,6 +473,16 @@ class PAMetrics:
         self.reranker_latency_seconds = RERANKER_LATENCY_SECONDS
         self.cpt_expansion_size = CPT_EXPANSION_SIZE
         self.icd_expansion_size = ICD_EXPANSION_SIZE
+        # API route metrics
+        self.pa_requests_submitted_total = PA_REQUESTS_SUBMITTED_TOTAL
+        self.case_views_total = CASE_VIEWS_TOTAL
+        self.documents_uploaded_total = DOCUMENTS_UPLOADED_TOTAL
+        self.document_size_bytes = DOCUMENT_SIZE_BYTES
+        self.document_downloads_total = DOCUMENT_DOWNLOADS_TOTAL
+        self.review_decisions_total = REVIEW_DECISIONS_TOTAL
+        self.review_escalations_total = REVIEW_ESCALATIONS_TOTAL
+        self.clarification_exhausted_total = CLARIFICATION_EXHAUSTED_TOTAL
+        self.clarification_responses_total = CLARIFICATION_RESPONSES_TOTAL
 
 
 # Module-level singleton
