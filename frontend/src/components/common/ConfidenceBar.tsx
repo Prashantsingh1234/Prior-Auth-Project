@@ -1,101 +1,83 @@
-import { clsx } from 'clsx'
+﻿import { cn, getConfidenceLevel, formatConfidence } from '@/lib/utils'
 
 interface ConfidenceBarProps {
-  score: number       // 0.0 – 1.0
+  value: number
   showLabel?: boolean
+  showPercent?: boolean
   size?: 'sm' | 'md' | 'lg'
+  variant?: 'bar' | 'ring'
   className?: string
 }
 
-function confidenceColor(score: number): string {
-  if (score >= 0.85) return 'bg-green-500'
-  if (score >= 0.65) return 'bg-amber-400'
-  return 'bg-red-500'
+const TRACK_H = { sm: 'h-1', md: 'h-1.5', lg: 'h-2' }
+const FILL_COLOR = {
+  high:   'bg-gradient-to-r from-emerald-500 to-emerald-400',
+  medium: 'bg-gradient-to-r from-amber-500 to-amber-400',
+  low:    'bg-gradient-to-r from-red-500 to-red-400',
 }
-
-function confidenceLabel(score: number): string {
-  if (score >= 0.85) return 'High'
-  if (score >= 0.65) return 'Medium'
-  return 'Low'
-}
-
-function confidenceTextColor(score: number): string {
-  if (score >= 0.85) return 'text-green-700'
-  if (score >= 0.65) return 'text-amber-700'
-  return 'text-red-700'
-}
+const LABEL_COLOR = { high: 'text-emerald-400', medium: 'text-amber-400', low: 'text-red-400' }
 
 export function ConfidenceBar({
-  score,
-  showLabel = true,
+  value,
+  showLabel = false,
+  showPercent = true,
   size = 'md',
+  variant = 'bar',
   className,
 }: ConfidenceBarProps) {
-  const pct   = Math.round(score * 100)
-  const color = confidenceColor(score)
-  const label = confidenceLabel(score)
-  const textColor = confidenceTextColor(score)
+  const level = getConfidenceLevel(value)
+  const pct = Math.round(value * 100)
 
-  const barHeight = size === 'sm' ? 'h-1' : size === 'lg' ? 'h-3' : 'h-2'
+  if (variant === 'ring') {
+    const r = 20
+    const circ = 2 * Math.PI * r
+    const dash = (pct / 100) * circ
+    const ringColor = { high: '#10b981', medium: '#f59e0b', low: '#ef4444' }[level]
+
+    return (
+      <div className={cn('flex items-center gap-2', className)}>
+        <div className="relative w-12 h-12 flex-shrink-0">
+          <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r={r} fill="none" strokeWidth="4" className="stroke-[var(--border)]" />
+            <circle
+              cx="24" cy="24" r={r}
+              fill="none" strokeWidth="4"
+              stroke={ringColor}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circ}`}
+              style={{ transition: 'stroke-dasharray 0.6s ease' }}
+            />
+          </svg>
+          <span className={cn('absolute inset-0 flex items-center justify-center text-xs font-bold', LABEL_COLOR[level])}>
+            {pct}%
+          </span>
+        </div>
+        {showLabel && (
+          <div>
+            <p className={cn('text-xs font-semibold capitalize', LABEL_COLOR[level])}>{level}</p>
+            <p className="text-xs text-[var(--text-3)]">Confidence</p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div className={clsx('flex items-center gap-2', className)}>
-      <div className={clsx('flex-1 bg-slate-100 rounded-full overflow-hidden', barHeight)}>
+    <div className={cn('flex items-center gap-2', className)}>
+      <div className={cn('flex-1 rounded-full bg-[var(--elevated)]', TRACK_H[size])}>
         <div
-          className={clsx('h-full rounded-full transition-all duration-500', color)}
+          className={cn('h-full rounded-full transition-all duration-700', FILL_COLOR[level])}
           style={{ width: `${pct}%` }}
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`Confidence: ${pct}%`}
         />
       </div>
+      {showPercent && (
+        <span className={cn('text-xs font-semibold tabular-nums w-9 text-right flex-shrink-0', LABEL_COLOR[level])}>
+          {formatConfidence(value)}
+        </span>
+      )}
       {showLabel && (
-        <span className={clsx('text-xs font-semibold tabular-nums', textColor)}>
-          {pct}%
-        </span>
+        <span className={cn('text-xs capitalize', LABEL_COLOR[level])}>{level}</span>
       )}
-      {showLabel && size !== 'sm' && (
-        <span className={clsx('text-xs font-medium', textColor)}>
-          {label}
-        </span>
-      )}
-    </div>
-  )
-}
-
-// ─── Circular confidence indicator ───────────────────────────────────────────
-
-export function ConfidenceRing({ score, size = 48 }: { score: number; size?: number }) {
-  const pct        = score * 100
-  const radius     = (size - 8) / 2
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference - (pct / 100) * circumference
-  const color = score >= 0.85 ? '#16a34a' : score >= 0.65 ? '#d97706' : '#dc2626'
-
-  return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none" stroke="#e2e8f0" strokeWidth={4}
-        />
-        <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none" stroke={color} strokeWidth={4}
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-        />
-      </svg>
-      <span
-        className="absolute text-xs font-bold tabular-nums"
-        style={{ color }}
-      >
-        {Math.round(pct)}%
-      </span>
     </div>
   )
 }

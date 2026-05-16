@@ -1,137 +1,146 @@
-import { clsx } from 'clsx'
-import { Brain, BookOpen, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
-import type { DecisionOutcome, PolicyCriterion } from '@/api/types'
-import { ConfidenceBar, ConfidenceRing } from '@/components/common/ConfidenceBar'
-import { RecommendationBadge } from '@/components/common/StatusBadge'
+﻿import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Brain, ChevronDown, ChevronUp, Lightbulb, AlertTriangle, BookOpen, Cpu } from 'lucide-react'
+import { ConfidenceBar } from '@/components/common/ConfidenceBar'
 
-interface RationaleViewerProps {
-  aiRecommendation: DecisionOutcome | null
-  aiConfidenceScore: number | null
-  aiRationale: string | null
-  policyCriteria: PolicyCriterion[]
-  isLoading?: boolean
+const RATIONALE = {
+  recommendation: 'APPROVE',
+  confidence: 0.91,
+  summary: 'Based on comprehensive analysis of submitted clinical documentation, patient Maria Gonzalez meets all primary eligibility criteria for total knee arthroplasty (CPT 27447). The case demonstrates clear medical necessity through documented failure of conservative management, radiographic evidence of severe disease, and significant functional impairment.',
+  model: 'gpt-4o',
+  tier: 'LARGE',
+  reasoning_steps: [
+    {
+      step: 'Document Analysis',
+      content: 'Processed 4 clinical documents (8 pages total). OCR confidence: 98.2%. Extracted 8 clinical entities including confirmed diagnosis codes M17.11 and M25.361.',
+    },
+    {
+      step: 'Policy Retrieval',
+      content: 'Retrieved 5 relevant policy sections from payer knowledge base using hybrid dense+sparse retrieval (RRF fusion). Top match: "TKA Medical Necessity Criteria" (similarity: 0.94).',
+    },
+    {
+      step: 'Criteria Evaluation',
+      content: '5/6 criteria fully met. 1 criterion (pre-operative cardiac evaluation) has insufficient documentation. However, the criterion states documentation must be submitted within 90 days; a note references completion of pre-op evaluation without explicit cardiac clearance letter.',
+    },
+    {
+      step: 'Clinical Judgment',
+      content: 'Patient profile: 73F, BMI 28.4, failed PT (6 months), failed pharmacotherapy (GI intolerance), failed 3 corticosteroid injections. This is a textbook indication for TKA per standard clinical guidelines and payer policy.',
+    },
+    {
+      step: 'Recommendation Formation',
+      content: 'Confidence of 0.91 reflects high certainty on primary criteria (4 criteria >0.93 confidence) offset by insufficient cardiac clearance documentation (0.61). Recommend approval with note to obtain cardiac clearance confirmation.',
+    },
+  ],
+  caveats: [
+    'Pre-operative cardiac evaluation documentation should be verified before scheduling',
+    'Surgical site infection risk protocols should be confirmed given patient age',
+  ],
+  policy_refs: [
+    'TKA Medical Necessity Criteria §4.2.1-4.2.5',
+    'Pre-surgical Clearance Requirements §4.3.1',
+    'Conservative Treatment Documentation Standards §3.1',
+  ],
 }
 
-export function RationaleViewer({
-  aiRecommendation,
-  aiConfidenceScore,
-  aiRationale,
-  policyCriteria,
-  isLoading,
-}: RationaleViewerProps) {
-  const [showSources, setShowSources] = useState(true)
-
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map((i) => <div key={i} className="h-12 bg-slate-100 rounded-xl animate-pulse" />)}
-      </div>
-    )
-  }
-
-  if (!aiRecommendation && !aiRationale) {
-    return (
-      <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
-        <Brain className="w-7 h-7 opacity-40" />
-        <span className="text-sm">AI analysis pending</span>
-      </div>
-    )
-  }
-
-  const allChunks = policyCriteria.flatMap((c) => c.source_chunks)
-  const uniqueChunks = allChunks.filter(
-    (chunk, idx) => allChunks.findIndex((c) => c.chunk_id === chunk.chunk_id) === idx,
-  )
+export function RationaleViewer() {
+  const [expandedStep, setExpandedStep] = useState<number | null>(0)
 
   return (
-    <div className="flex flex-col gap-4 h-full overflow-y-auto pr-0.5">
-      {/* AI recommendation header */}
-      {(aiRecommendation || aiConfidenceScore != null) && (
-        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-          {aiConfidenceScore != null && (
-            <ConfidenceRing score={aiConfidenceScore} size={52} />
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-slate-500">AI Recommendation</span>
-              {aiRecommendation && <RecommendationBadge recommendation={aiRecommendation} />}
-            </div>
-            {aiConfidenceScore != null && (
-              <ConfidenceBar score={aiConfidenceScore} size="sm" />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Criteria summary */}
-      {policyCriteria.length > 0 && (
-        <div className="flex items-center gap-2 p-2.5 bg-white border border-slate-200 rounded-xl">
-          <ShieldCheck className="w-4 h-4 text-brand-500 flex-shrink-0" />
-          <div className="flex gap-3 text-xs flex-wrap">
-            <span className="text-green-700 font-semibold">
-              {policyCriteria.filter((c) => c.status === 'PASS').length} criteria met
-            </span>
-            <span className="text-red-700 font-semibold">
-              {policyCriteria.filter((c) => c.status === 'FAIL').length} not met
-            </span>
-            <span className="text-amber-700 font-semibold">
-              {policyCriteria.filter((c) => c.status === 'INSUFFICIENT_EVIDENCE').length} insufficient
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Main rationale text */}
-      {aiRationale && (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
+          <div className="flex items-center gap-2">
+            <Brain className="w-4.5 h-4.5 text-violet-400" />
+            <h3 className="text-sm font-semibold text-[var(--text-1)]">AI Clinical Rationale</h3>
+          </div>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">
+            Generated by {RATIONALE.model} ({RATIONALE.tier} tier)
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-[var(--text-3)] mb-1">Overall Confidence</p>
+          <ConfidenceBar value={RATIONALE.confidence} variant="ring" />
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="p-4 rounded-xl bg-[var(--elevated)] border border-[var(--border)]">
+        <div className="flex items-center gap-2 mb-2">
+          <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">Summary</span>
+        </div>
+        <p className="text-sm text-[var(--text-1)] leading-relaxed">{RATIONALE.summary}</p>
+      </div>
+
+      {/* Reasoning steps */}
+      <div>
+        <p className="section-label mb-3">Reasoning Chain ({RATIONALE.reasoning_steps.length} steps)</p>
+        <div className="space-y-2">
+          {RATIONALE.reasoning_steps.map((step, i) => (
+            <div key={i} className="rounded-xl border border-[var(--border)] overflow-hidden">
+              <button
+                onClick={() => setExpandedStep(expandedStep === i ? null : i)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--elevated)] transition-colors"
+              >
+                <span className="w-6 h-6 rounded-full bg-brand-500/15 text-brand-400 text-xs flex items-center justify-center font-bold flex-shrink-0">
+                  {i + 1}
+                </span>
+                <span className="flex-1 text-sm font-medium text-[var(--text-1)]">{step.step}</span>
+                {expandedStep === i
+                  ? <ChevronUp className="w-4 h-4 text-[var(--text-3)]" />
+                  : <ChevronDown className="w-4 h-4 text-[var(--text-3)]" />
+                }
+              </button>
+              <AnimatePresence>
+                {expandedStep === i && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="px-4 pb-4 pt-1 border-t border-[var(--border)]">
+                      <p className="text-sm text-[var(--text-2)] leading-relaxed">{step.content}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Caveats */}
+      {RATIONALE.caveats.length > 0 && (
+        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/15">
           <div className="flex items-center gap-2 mb-2">
-            <Brain className="w-4 h-4 text-brand-500" />
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">AI Rationale</h4>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Caveats</span>
           </div>
-          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-100 rounded-xl p-3">
-            {aiRationale}
-          </div>
+          <ul className="space-y-1">
+            {RATIONALE.caveats.map((c, i) => (
+              <li key={i} className="text-sm text-[var(--text-2)] flex items-start gap-2">
+                <span className="text-amber-400 mt-1">•</span>
+                {c}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      {/* Policy sources */}
-      {uniqueChunks.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowSources((v) => !v)}
-            className="flex items-center gap-2 w-full mb-2 text-left group"
-          >
-            <BookOpen className="w-4 h-4 text-slate-400 group-hover:text-brand-500 transition-colors" />
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wide flex-1">
-              Policy Sources ({uniqueChunks.length})
-            </h4>
-            {showSources
-              ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-              : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-          </button>
-          {showSources && (
-            <div className="space-y-2">
-              {uniqueChunks.map((chunk) => (
-                <div key={chunk.chunk_id} className="bg-white border border-slate-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-brand-700">{chunk.source}</span>
-                    <span className={clsx(
-                      'text-xs font-medium px-1.5 py-0.5 rounded',
-                      chunk.relevance_score >= 0.85 ? 'text-green-700 bg-green-50' :
-                      chunk.relevance_score >= 0.65 ? 'text-amber-700 bg-amber-50' :
-                      'text-slate-600 bg-slate-50',
-                    )}>
-                      {Math.round(chunk.relevance_score * 100)}% relevance
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{chunk.text}</p>
-                </div>
-              ))}
+      {/* Policy references */}
+      <div>
+        <p className="section-label mb-2">Policy References</p>
+        <div className="space-y-1.5">
+          {RATIONALE.policy_refs.map((ref, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm text-[var(--text-2)]">
+              <BookOpen className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+              {ref}
             </div>
-          )}
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -1,130 +1,140 @@
-import { format, formatDistanceToNow } from 'date-fns'
-import { clsx } from 'clsx'
+﻿import { motion } from 'framer-motion'
 import {
-  CheckCircle2, XCircle, Clock, ArrowUpCircle, MessageSquare,
-  FileText, UserCheck, Activity,
+  FileUp, UserCheck, Brain, Eye, CheckCircle2,
+  XCircle, MessageSquare, ArrowUpRight, AlertTriangle,
 } from 'lucide-react'
-import type { AuditEvent, ReviewerActionType } from '@/api/types'
+import { formatDateTime } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
-interface AuditHistoryProps {
-  events: AuditEvent[]
-  isLoading?: boolean
+type AuditEventType =
+  | 'SUBMITTED' | 'ASSIGNED' | 'AI_PROCESSED' | 'REVIEWED'
+  | 'APPROVED' | 'DENIED' | 'ESCALATED' | 'PENDED' | 'CLARIFICATION_REQUESTED'
+
+const EVENT_CFG: Record<AuditEventType, { icon: React.ElementType; color: string; bg: string }> = {
+  SUBMITTED:                { icon: FileUp,           color: 'text-brand-400',   bg: 'bg-brand-500/15' },
+  ASSIGNED:                 { icon: UserCheck,         color: 'text-sky-400',     bg: 'bg-sky-500/15' },
+  AI_PROCESSED:             { icon: Brain,             color: 'text-violet-400',  bg: 'bg-violet-500/15' },
+  REVIEWED:                 { icon: Eye,               color: 'text-slate-400',   bg: 'bg-slate-500/15' },
+  APPROVED:                 { icon: CheckCircle2,      color: 'text-emerald-400', bg: 'bg-emerald-500/15' },
+  DENIED:                   { icon: XCircle,           color: 'text-red-400',     bg: 'bg-red-500/15' },
+  ESCALATED:                { icon: ArrowUpRight,      color: 'text-violet-400',  bg: 'bg-violet-500/15' },
+  PENDED:                   { icon: AlertTriangle,     color: 'text-amber-400',   bg: 'bg-amber-500/15' },
+  CLARIFICATION_REQUESTED:  { icon: MessageSquare,     color: 'text-orange-400',  bg: 'bg-orange-500/15' },
 }
 
-const EVENT_CONFIG: Record<ReviewerActionType, { icon: React.ReactNode; color: string; bg: string }> = {
-  ASSIGNED:                 { icon: <UserCheck className="w-3.5 h-3.5" />,    color: 'text-violet-600', bg: 'bg-violet-50' },
-  APPROVED:                 { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'text-green-600',  bg: 'bg-green-50' },
-  DENIED:                   { icon: <XCircle className="w-3.5 h-3.5" />,      color: 'text-red-600',    bg: 'bg-red-50' },
-  PENDED:                   { icon: <Clock className="w-3.5 h-3.5" />,        color: 'text-amber-600',  bg: 'bg-amber-50' },
-  OVERRIDE_APPROVED:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'text-green-700',  bg: 'bg-green-100' },
-  OVERRIDE_DENIED:          { icon: <XCircle className="w-3.5 h-3.5" />,      color: 'text-red-700',    bg: 'bg-red-100' },
-  REQUESTED_CLARIFICATION:  { icon: <MessageSquare className="w-3.5 h-3.5" />, color: 'text-amber-600', bg: 'bg-amber-50' },
-  ESCALATED:                { icon: <ArrowUpCircle className="w-3.5 h-3.5" />, color: 'text-purple-600', bg: 'bg-purple-50' },
-  ADDED_NOTE:               { icon: <FileText className="w-3.5 h-3.5" />,     color: 'text-slate-600',  bg: 'bg-slate-100' },
+interface AuditEvent {
+  id: string
+  eventType: AuditEventType
+  description: string
+  actorId: string
+  actorRole: string
+  actorName: string
+  occurredAt: string
+  metadata?: Record<string, any>
 }
 
-function formatEventLabel(eventType: ReviewerActionType): string {
-  return eventType
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
+const MOCK_EVENTS: AuditEvent[] = [
+  {
+    id: 'ae1',
+    eventType: 'SUBMITTED',
+    description: 'PA request submitted for total knee arthroplasty (CPT 27447)',
+    actorId: 'prov-001',
+    actorRole: 'provider',
+    actorName: 'Dr. Robert Stein',
+    occurredAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    metadata: { documents: 4, cpt: '27447', icd: ['M17.11', 'M25.361'] },
+  },
+  {
+    id: 'ae2',
+    eventType: 'AI_PROCESSED',
+    description: 'AI workflow completed: OCR → Extraction → Retrieval → Reasoning',
+    actorId: 'system',
+    actorRole: 'system',
+    actorName: 'AI Engine',
+    occurredAt: new Date(Date.now() - 3600000 * 3.95).toISOString(),
+    metadata: { duration_ms: 3420, model: 'gpt-4o', recommendation: 'APPROVE', confidence: 0.91 },
+  },
+  {
+    id: 'ae3',
+    eventType: 'CLARIFICATION_REQUESTED',
+    description: 'AI requested pre-operative cardiac evaluation documentation',
+    actorId: 'system',
+    actorRole: 'system',
+    actorName: 'AI Engine',
+    occurredAt: new Date(Date.now() - 3600000 * 3.5).toISOString(),
+  },
+  {
+    id: 'ae4',
+    eventType: 'ASSIGNED',
+    description: 'Case assigned to Dr. Sarah Chen for review',
+    actorId: 'admin-001',
+    actorRole: 'admin',
+    actorName: 'Admin',
+    occurredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    metadata: { reviewer: 'Dr. Sarah Chen' },
+  },
+  {
+    id: 'ae5',
+    eventType: 'REVIEWED',
+    description: 'Reviewer opened case workspace',
+    actorId: 'rev-001',
+    actorRole: 'reviewer',
+    actorName: 'Dr. Sarah Chen',
+    occurredAt: new Date(Date.now() - 3600000).toISOString(),
+  },
+]
 
-export function AuditHistory({ events, isLoading }: AuditHistoryProps) {
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex gap-3">
-            <div className="w-7 h-7 rounded-full bg-slate-100 animate-pulse flex-shrink-0" />
-            <div className="flex-1 space-y-1.5 pt-1">
-              <div className="h-3 bg-slate-100 rounded animate-pulse w-1/2" />
-              <div className="h-2.5 bg-slate-50 rounded animate-pulse w-3/4" />
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (events.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-24 text-slate-400 text-sm gap-2">
-        <Activity className="w-6 h-6 opacity-40" />
-        No audit events
-      </div>
-    )
-  }
-
-  const sorted = [...events].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  )
-
+export function AuditHistory() {
   return (
-    <div className="relative">
-      {/* Vertical connector line */}
-      <div className="absolute left-3.5 top-0 bottom-0 w-px bg-slate-200" />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[var(--text-1)]">Audit Trail</h3>
+        <span className="text-xs text-[var(--text-3)]">{MOCK_EVENTS.length} events</span>
+      </div>
 
-      <div className="space-y-4">
-        {sorted.map((event) => {
-          const cfg = EVENT_CONFIG[event.event_type] ?? {
-            icon: <Activity className="w-3.5 h-3.5" />,
-            color: 'text-slate-400',
-            bg: 'bg-slate-50',
-          }
+      <div className="relative">
+        {/* Vertical line */}
+        <div className="absolute left-4 top-5 bottom-5 w-px bg-[var(--border)]" />
 
-          return (
-            <div key={event.event_id} className="flex gap-3 relative">
-              {/* Timeline dot */}
-              <div className={clsx(
-                'flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center z-10 ring-2 ring-white',
-                cfg.bg, cfg.color,
-              )}>
-                {cfg.icon}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0 pt-0.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800">
-                      {formatEventLabel(event.event_type)}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {event.actor_name}
-                      <span className="text-slate-400 ml-1 capitalize">({event.actor_role})</span>
-                    </p>
-                  </div>
-                  <p
-                    className="text-xs text-slate-400 flex-shrink-0"
-                    title={format(new Date(event.timestamp), 'PPpp')}
-                  >
-                    {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
-                  </p>
+        <div className="space-y-4">
+          {MOCK_EVENTS.map((event, i) => {
+            const cfg = EVENT_CFG[event.eventType]
+            const Icon = cfg.icon
+            return (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.07 }}
+                className="flex items-start gap-4"
+              >
+                {/* Icon */}
+                <div className={cn('w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 border-2 border-[var(--surface)] z-10', cfg.bg)}>
+                  <Icon className={cn('w-3.5 h-3.5', cfg.color)} />
                 </div>
 
-                {event.note && (
-                  <div className={clsx('mt-1.5 p-2 rounded-lg text-xs text-slate-600 leading-relaxed', cfg.bg)}>
-                    {event.note}
+                {/* Content */}
+                <div className="flex-1 pt-1 min-w-0">
+                  <p className="text-sm text-[var(--text-1)] leading-snug">{event.description}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-[var(--text-3)]">{event.actorName}</span>
+                    <span className="text-xs text-[var(--text-3)]">·</span>
+                    <span className="text-xs text-[var(--text-3)]">{formatDateTime(event.occurredAt)}</span>
                   </div>
-                )}
-
-                {Object.keys(event.metadata).length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                    {Object.entries(event.metadata)
-                      .filter(([, v]) => v != null && v !== '')
-                      .map(([k, v]) => (
-                        <span key={k} className="text-xs text-slate-400">
-                          <span className="capitalize">{k.replace(/_/g, ' ')}</span>:{' '}
-                          <span className="text-slate-600 font-medium">{String(v)}</span>
+                  {event.metadata && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {Object.entries(event.metadata).map(([k, v]) => (
+                        <span key={k} className="text-xs px-2 py-0.5 rounded-full bg-[var(--elevated)] text-[var(--text-3)] border border-[var(--border)]">
+                          {k}: {Array.isArray(v) ? v.join(', ') : String(v)}
                         </span>
                       ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

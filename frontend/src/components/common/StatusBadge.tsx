@@ -1,18 +1,33 @@
-import { clsx } from 'clsx'
-import type { CaseStatus, CasePriority, CriterionStatus, DecisionOutcome } from '@/api/types'
+﻿import { cn } from '@/lib/utils'
 
-// ─── Case Status Badge ────────────────────────────────────────────────────────
+type CaseStatus =
+  | 'SUBMITTED' | 'UNDER_REVIEW' | 'PENDING_INFO'
+  | 'APPROVED' | 'DENIED' | 'ESCALATED' | 'WITHDRAWN'
+
+type Priority = 'ROUTINE' | 'URGENT' | 'EMERGENT'
+type Recommendation = 'APPROVE' | 'DENY' | 'REQUEST_INFO' | 'ESCALATE'
 
 const STATUS_CONFIG: Record<CaseStatus, { label: string; className: string }> = {
-  SUBMITTED:             { label: 'Submitted',             className: 'bg-slate-100 text-slate-700 ring-slate-200' },
-  PROCESSING:            { label: 'Processing',            className: 'bg-blue-100 text-blue-700 ring-blue-200 animate-pulse-slow' },
-  PENDING_CLARIFICATION: { label: 'Pending Clarification', className: 'bg-amber-100 text-amber-700 ring-amber-200' },
-  UNDER_REVIEW:          { label: 'Under Review',          className: 'bg-violet-100 text-violet-700 ring-violet-200' },
-  APPROVED:              { label: 'Approved',              className: 'bg-green-100 text-green-700 ring-green-200' },
-  DENIED:                { label: 'Denied',                className: 'bg-red-100 text-red-700 ring-red-200' },
-  PENDED:                { label: 'Pended',                className: 'bg-orange-100 text-orange-700 ring-orange-200' },
-  ESCALATED:             { label: 'Escalated',             className: 'bg-purple-100 text-purple-700 ring-purple-200' },
-  CANCELLED:             { label: 'Cancelled',             className: 'bg-gray-100 text-gray-500 ring-gray-200' },
+  SUBMITTED:    { label: 'Submitted',    className: 'bg-sky-500/15 text-sky-400 border-sky-500/25' },
+  UNDER_REVIEW: { label: 'Under Review', className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
+  PENDING_INFO: { label: 'Pending Info', className: 'bg-orange-500/15 text-orange-400 border-orange-500/25' },
+  APPROVED:     { label: 'Approved',     className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
+  DENIED:       { label: 'Denied',       className: 'bg-red-500/15 text-red-400 border-red-500/25' },
+  ESCALATED:    { label: 'Escalated',    className: 'bg-violet-500/15 text-violet-400 border-violet-500/25' },
+  WITHDRAWN:    { label: 'Withdrawn',    className: 'bg-slate-500/15 text-slate-400 border-slate-500/25' },
+}
+
+const PRIORITY_CONFIG: Record<Priority, { label: string; className: string; dot: string }> = {
+  ROUTINE:  { label: 'Routine',  className: 'bg-slate-500/10 text-slate-400 border-slate-500/20',   dot: 'bg-slate-400' },
+  URGENT:   { label: 'Urgent',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25',   dot: 'bg-amber-400' },
+  EMERGENT: { label: 'Emergent', className: 'bg-red-500/15 text-red-400 border-red-500/25',         dot: 'bg-red-400 animate-pulse' },
+}
+
+const REC_CONFIG: Record<Recommendation, { label: string; className: string }> = {
+  APPROVE:      { label: 'Approve',       className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
+  DENY:         { label: 'Deny',          className: 'bg-red-500/15 text-red-400 border-red-500/25' },
+  REQUEST_INFO: { label: 'Request Info',  className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
+  ESCALATE:     { label: 'Escalate',      className: 'bg-violet-500/15 text-violet-400 border-violet-500/25' },
 }
 
 interface StatusBadgeProps {
@@ -20,71 +35,35 @@ interface StatusBadgeProps {
   size?: 'sm' | 'md'
 }
 
-export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
-  const cfg = STATUS_CONFIG[status]
+interface PriorityBadgeProps {
+  priority: Priority
+  size?: 'sm' | 'md'
+}
+
+interface RecommendationBadgeProps {
+  recommendation: Recommendation
+  size?: 'sm' | 'md'
+}
+
+const BASE = 'inline-flex items-center gap-1.5 rounded-full border font-medium'
+const SIZE = { sm: 'px-2 py-0.5 text-xs', md: 'px-2.5 py-1 text-xs' }
+
+export function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.SUBMITTED
+  return <span className={cn(BASE, SIZE[size], cfg.className)}>{cfg.label}</span>
+}
+
+export function PriorityBadge({ priority, size = 'sm' }: PriorityBadgeProps) {
+  const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.ROUTINE
   return (
-    <span
-      className={clsx(
-        'inline-flex items-center font-medium rounded-full ring-1',
-        size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs',
-        cfg.className,
-      )}
-    >
+    <span className={cn(BASE, SIZE[size], cfg.className)}>
+      <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dot)} />
       {cfg.label}
     </span>
   )
 }
 
-// ─── Priority Badge ───────────────────────────────────────────────────────────
-
-const PRIORITY_CONFIG: Record<CasePriority, { label: string; className: string; dot: string }> = {
-  ROUTINE:  { label: 'Routine',  className: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-  URGENT:   { label: 'Urgent',   className: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-  EMERGENT: { label: 'Emergent', className: 'bg-red-100 text-red-700', dot: 'bg-red-500 animate-pulse' },
-}
-
-export function PriorityBadge({ priority }: { priority: CasePriority }) {
-  const cfg = PRIORITY_CONFIG[priority]
-  return (
-    <span className={clsx('inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full', cfg.className)}>
-      <span className={clsx('w-1.5 h-1.5 rounded-full', cfg.dot)} />
-      {cfg.label}
-    </span>
-  )
-}
-
-// ─── AI Recommendation Badge ──────────────────────────────────────────────────
-
-const DECISION_CONFIG: Record<DecisionOutcome, { label: string; className: string }> = {
-  APPROVE: { label: 'Approve',  className: 'bg-green-100 text-green-700 ring-green-200' },
-  DENY:    { label: 'Deny',     className: 'bg-red-100 text-red-700 ring-red-200' },
-  PEND:    { label: 'Pend',     className: 'bg-amber-100 text-amber-700 ring-amber-200' },
-}
-
-export function RecommendationBadge({ recommendation }: { recommendation: DecisionOutcome }) {
-  const cfg = DECISION_CONFIG[recommendation]
-  return (
-    <span className={clsx('inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full ring-1', cfg.className)}>
-      AI: {cfg.label}
-    </span>
-  )
-}
-
-// ─── Criterion Status Badge ───────────────────────────────────────────────────
-
-const CRITERION_CONFIG: Record<CriterionStatus, { label: string; icon: string; className: string }> = {
-  PASS:                 { label: 'Pass',                 icon: '✓', className: 'text-green-700 bg-green-50' },
-  FAIL:                 { label: 'Fail',                 icon: '✗', className: 'text-red-700 bg-red-50' },
-  INSUFFICIENT_EVIDENCE:{ label: 'Insufficient Evidence',icon: '?', className: 'text-amber-700 bg-amber-50' },
-  NOT_APPLICABLE:       { label: 'N/A',                  icon: '—', className: 'text-gray-500 bg-gray-50' },
-}
-
-export function CriterionBadge({ status }: { status: CriterionStatus }) {
-  const cfg = CRITERION_CONFIG[status]
-  return (
-    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded', cfg.className)}>
-      <span className="font-bold">{cfg.icon}</span>
-      {cfg.label}
-    </span>
-  )
+export function RecommendationBadge({ recommendation, size = 'sm' }: RecommendationBadgeProps) {
+  const cfg = REC_CONFIG[recommendation] ?? REC_CONFIG.APPROVE
+  return <span className={cn(BASE, SIZE[size], cfg.className)}>{cfg.label}</span>
 }

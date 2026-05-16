@@ -1,374 +1,206 @@
-import { useState } from 'react'
-import { clsx } from 'clsx'
-import {
-  CheckCircle2, XCircle, Clock, ArrowUpCircle, MessageSquare,
-  X, AlertTriangle, ChevronDown, ChevronUp,
-} from 'lucide-react'
-import { useReviewStore } from '@/store/reviewStore'
-import { useApprove, useDeny, usePend, useEscalate, useAddNote } from '@/hooks/useReview'
-import type { PACase, ApproveRequest, DenyRequest, PendRequest, EscalateRequest } from '@/api/types'
+﻿import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { motion, AnimatePresence } from 'framer-motion'
+import { CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, User, Clock, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { cn, formatRelative } from '@/lib/utils'
+import { ConfidenceBar } from '@/components/common/ConfidenceBar'
 
-type MutationLike<TBody> = {
-  mutate: (variables: TBody) => void
-  isPending: boolean
+const schema = z.object({
+  rationale: z.string().min(20, 'Please provide a rationale (min 20 characters)').max(2000),
+})
+type FormData = z.infer<typeof schema>
+
+type DecisionType = 'approve' | 'deny' | 'pend' | 'escalate'
+
+const DECISION_CFG = {
+  approve:  { label: 'Approve',  icon: CheckCircle2,  btnClass: 'btn-approve',  confirmBg: 'bg-emerald-500/10 border-emerald-500/20', confirmText: 'text-emerald-400' },
+  deny:     { label: 'Deny',     icon: XCircle,       btnClass: 'btn-deny',     confirmBg: 'bg-red-500/10 border-red-500/20',         confirmText: 'text-red-400' },
+  pend:     { label: 'Request Info', icon: AlertTriangle, btnClass: 'btn-pend', confirmBg: 'bg-amber-500/10 border-amber-500/20',     confirmText: 'text-amber-400' },
+  escalate: { label: 'Escalate', icon: ArrowUpRight,  btnClass: 'btn-ghost',    confirmBg: 'bg-violet-500/10 border-violet-500/20',   confirmText: 'text-violet-400' },
 }
 
-interface ReviewerActionsProps {
-  caseData: PACase
+interface Props {
+  caseData: {
+    id: string
+    caseNumber: string
+    status: string
+    aiRecommendation: string
+    confidence: number
+    patient: { firstName: string; lastName: string; memberId: string }
+    procedure: string
+    cptCode: string
+  }
 }
 
-export function ReviewerActions({ caseData }: ReviewerActionsProps) {
-  const { activeModal, setActiveModal } = useReviewStore()
+export function ReviewerActions({ caseData }: Props) {
+  const navigate = useNavigate()
+  const [selected, setSelected] = useState<DecisionType | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
-  const approveMutation = useApprove(caseData.case_id)
-  const denyMutation    = useDeny(caseData.case_id)
-  const pendMutation    = usePend(caseData.case_id)
-  const escalateMutation = useEscalate(caseData.case_id)
-  const noteMutation    = useAddNote(caseData.case_id)
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  })
 
-  const isTerminal = ['APPROVED', 'DENIED', 'CANCELLED'].includes(caseData.status)
-  const canReview  = !isTerminal
+  const onSubmit = async (data: FormData) => {
+    if (!selected) return
+    setSubmitting(true)
+    await new Promise((r) => setTimeout(r, 1000))
+    setSubmitting(false)
+    setSubmitted(true)
+    setTimeout(() => navigate('/dashboard'), 2000)
+  }
 
-  return (
-    <div className="flex flex-col gap-3">
-      {isTerminal && (
-        <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
-          <AlertTriangle className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          This case is {caseData.status.toLowerCase().replace(/_/g, ' ')} and cannot be modified.
+  if (submitted) {
+    const cfg = DECISION_CFG[selected!]
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex flex-col items-center justify-center h-full p-8 text-center"
+      >
+        <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center mb-4">
+          <CheckCircle2 className="w-8 h-8 text-emerald-400" />
         </div>
-      )}
+        <p className="text-lg font-semibold text-[var(--text-1)]">Decision Recorded</p>
+        <p className="text-sm text-[var(--text-3)] mt-1">
+          Case {caseData.caseNumber} — {cfg.label}
+        </p>
+        <p className="text-xs text-[var(--text-3)] mt-4">Returning to queue…</p>
+      </motion.div>
+    )
+  }
 
-      <div className="grid grid-cols-2 gap-2">
-        <ActionButton icon={<CheckCircle2 className="w-4 h-4" />} label="Approve"  variant="approve"  disabled={!canReview} onClick={() => setActiveModal('approve')} />
-        <ActionButton icon={<XCircle className="w-4 h-4" />}      label="Deny"     variant="deny"     disabled={!canReview} onClick={() => setActiveModal('deny')} />
-        <ActionButton icon={<Clock className="w-4 h-4" />}        label="Pend"     variant="pend"     disabled={!canReview} onClick={() => setActiveModal('pend')} />
-        <ActionButton icon={<ArrowUpCircle className="w-4 h-4" />} label="Escalate" variant="escalate" disabled={!canReview} onClick={() => setActiveModal('escalate')} />
-      </div>
-
-      <button
-        onClick={() => setActiveModal('note')}
-        className="flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-colors"
-      >
-        <MessageSquare className="w-4 h-4" />
-        Add Note
-      </button>
-
-      {activeModal === 'approve' && (
-        <ApproveModal
-          mutation={approveMutation}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-      {activeModal === 'deny' && (
-        <DenyModal
-          mutation={denyMutation}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-      {activeModal === 'pend' && (
-        <PendModal
-          mutation={pendMutation}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-      {activeModal === 'escalate' && (
-        <EscalateModal
-          mutation={escalateMutation}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-      {activeModal === 'note' && (
-        <NoteModal
-          mutation={noteMutation}
-          onClose={() => setActiveModal(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Shared styles ────────────────────────────────────────────────────────────
-
-const VARIANT_STYLES: Record<string, string> = {
-  approve:  'bg-approve  text-white hover:bg-approve/90  focus:ring-approve',
-  deny:     'bg-deny     text-white hover:bg-deny/90     focus:ring-deny',
-  pend:     'bg-pend     text-white hover:bg-pend/90     focus:ring-pend',
-  escalate: 'bg-escalate text-white hover:bg-escalate/90 focus:ring-escalate',
-}
-
-function ActionButton({
-  icon, label, variant, disabled, onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  variant: string
-  disabled?: boolean
-  onClick: () => void
-}) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={clsx(
-        'flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all duration-150',
-        'focus:outline-none focus:ring-2 focus:ring-offset-2',
-        VARIANT_STYLES[variant],
-        disabled && 'opacity-40 cursor-not-allowed',
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
-function ModalShell({
-  title, children, onClose,
-}: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-fade-in">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+    <div className="p-5 space-y-5">
+      {/* Case summary */}
+      <div>
+        <p className="section-label mb-2">Case Summary</p>
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-[var(--text-3)]">Patient</span>
+            <span className="text-[var(--text-1)] font-medium">
+              {caseData.patient.firstName} {caseData.patient.lastName}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--text-3)]">Member ID</span>
+            <span className="mono text-xs text-[var(--text-2)]">{caseData.patient.memberId}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--text-3)]">Procedure</span>
+            <span className="text-[var(--text-1)] text-right max-w-40 leading-snug">{caseData.procedure}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--text-3)]">CPT Code</span>
+            <span className="mono text-xs text-emerald-400">{caseData.cptCode}</span>
+          </div>
         </div>
-        {children}
       </div>
-    </div>
-  )
-}
 
-// ─── Action-specific modals ───────────────────────────────────────────────────
+      <div className="h-px bg-[var(--border)]" />
 
-function ApproveModal({
-  mutation, onClose,
-}: { mutation: MutationLike<ApproveRequest>; onClose: () => void }) {
-  const [rationale, setRationale] = useState('')
-  const [override, setOverride]   = useState('')
-  const [showOverride, setShow]   = useState(false)
-
-  return (
-    <ModalShell title="Approve Authorization" onClose={onClose}>
-      <p className="text-sm text-slate-500 mb-4">Confirm approval of this prior authorization request.</p>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-slate-700 mb-1.5">Approval rationale (optional)</label>
-        <textarea
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          rows={3}
-          placeholder="Enter rationale…"
-          className="w-full text-sm border border-slate-200 rounded-lg p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder-slate-300"
-        />
+      {/* AI recommendation */}
+      <div>
+        <p className="section-label mb-2">AI Recommendation</p>
+        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-400">Approve</span>
+          </div>
+          <ConfidenceBar value={caseData.confidence} size="sm" showLabel />
+        </div>
       </div>
-      <OverrideSection override={override} setOverride={setOverride} show={showOverride} setShow={setShow} />
-      <ModalActions
-        variant="approve"
-        label="Approve"
-        isPending={mutation.isPending}
-        canSubmit
-        onClose={onClose}
-        onSubmit={() => mutation.mutate({ rationale, override_reason: override || undefined })}
-      />
-    </ModalShell>
-  )
-}
 
-function DenyModal({
-  mutation, onClose,
-}: { mutation: MutationLike<DenyRequest>; onClose: () => void }) {
-  const [rationale, setRationale] = useState('')
-  const [override, setOverride]   = useState('')
-  const [showOverride, setShow]   = useState(false)
+      <div className="h-px bg-[var(--border)]" />
 
-  return (
-    <ModalShell title="Deny Authorization" onClose={onClose}>
-      <p className="text-sm text-slate-500 mb-4">Provide the denial rationale. This will be included in the member notification.</p>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-slate-700 mb-1.5">
-          Denial reason <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          rows={4}
-          placeholder="Enter denial rationale…"
-          className="w-full text-sm border border-slate-200 rounded-lg p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder-slate-300"
-        />
-        {rationale.length > 0 && rationale.trim().length < 10 && (
-          <p className="text-xs text-red-500 mt-1">Minimum 10 characters required</p>
-        )}
+      {/* Decision */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <p className="section-label">Your Decision</p>
+
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.entries(DECISION_CFG) as [DecisionType, typeof DECISION_CFG['approve']][]).map(([type, cfg]) => {
+            const Icon = cfg.icon
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSelected(type)}
+                className={cn(
+                  'btn btn-sm flex items-center justify-center gap-1.5 transition-all',
+                  cfg.btnClass,
+                  selected === type ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)]' : '',
+                  selected === type && type === 'approve' ? 'ring-emerald-500' : '',
+                  selected === type && type === 'deny' ? 'ring-red-500' : '',
+                  selected === type && type === 'pend' ? 'ring-amber-500' : '',
+                  selected === type && type === 'escalate' ? 'ring-violet-500' : '',
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {cfg.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <AnimatePresence>
+          {selected && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={cn('p-3 rounded-lg border mb-3', DECISION_CFG[selected].confirmBg)}>
+                <p className={cn('text-xs font-medium', DECISION_CFG[selected].confirmText)}>
+                  Recording: {DECISION_CFG[selected].label} — {caseData.caseNumber}
+                </p>
+              </div>
+
+              <label className="section-label">Clinical Rationale *</label>
+              <textarea
+                {...register('rationale')}
+                rows={5}
+                className={cn(
+                  'input mt-1 w-full resize-none',
+                  errors.rationale && 'border-red-500/50'
+                )}
+                placeholder={`Document your clinical rationale for ${DECISION_CFG[selected].label.toLowerCase()}ing this request…`}
+              />
+              {errors.rationale && (
+                <p className="text-xs text-red-400 mt-1">{errors.rationale.message}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className={cn(
+                  'btn w-full mt-3 flex items-center justify-center gap-2',
+                  selected === 'approve' ? 'btn-approve' :
+                  selected === 'deny' ? 'btn-deny' :
+                  selected === 'pend' ? 'btn-pend' : 'btn-primary',
+                  'disabled:opacity-60'
+                )}
+              >
+                {submitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
+                ) : (
+                  <>{DECISION_CFG[selected].label} Case</>
+                )}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </form>
+
+      {/* Reviewer info */}
+      <div className="flex items-center gap-2 text-xs text-[var(--text-3)]">
+        <User className="w-3.5 h-3.5" />
+        <span>Decision will be attributed to your account and audited</span>
       </div>
-      <OverrideSection override={override} setOverride={setOverride} show={showOverride} setShow={setShow} />
-      <ModalActions
-        variant="deny"
-        label="Deny"
-        isPending={mutation.isPending}
-        canSubmit={rationale.trim().length >= 10}
-        onClose={onClose}
-        onSubmit={() => mutation.mutate({ rationale, override_reason: override || undefined })}
-      />
-    </ModalShell>
-  )
-}
-
-function PendModal({
-  mutation, onClose,
-}: { mutation: MutationLike<PendRequest>; onClose: () => void }) {
-  const [pendingReason, setPendingReason] = useState('')
-
-  return (
-    <ModalShell title="Pend for Clarification" onClose={onClose}>
-      <p className="text-sm text-slate-500 mb-4">Request additional information before making a determination.</p>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-slate-700 mb-1.5">
-          What information is needed? <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={pendingReason}
-          onChange={(e) => setPendingReason(e.target.value)}
-          rows={4}
-          placeholder="Describe the required information…"
-          className="w-full text-sm border border-slate-200 rounded-lg p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder-slate-300"
-        />
-      </div>
-      <ModalActions
-        variant="pend"
-        label="Pend"
-        isPending={mutation.isPending}
-        canSubmit={pendingReason.trim().length >= 10}
-        onClose={onClose}
-        onSubmit={() => mutation.mutate({ rationale: pendingReason, pending_reason: pendingReason })}
-      />
-    </ModalShell>
-  )
-}
-
-function EscalateModal({
-  mutation, onClose,
-}: { mutation: MutationLike<EscalateRequest>; onClose: () => void }) {
-  const [reason, setReason] = useState('')
-
-  return (
-    <ModalShell title="Escalate Case" onClose={onClose}>
-      <p className="text-sm text-slate-500 mb-4">Escalate to senior reviewer or medical director for complex determination.</p>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-slate-700 mb-1.5">
-          Reason for escalation <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={4}
-          placeholder="Explain why this case requires escalation…"
-          className="w-full text-sm border border-slate-200 rounded-lg p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder-slate-300"
-        />
-      </div>
-      <ModalActions
-        variant="escalate"
-        label="Escalate"
-        isPending={mutation.isPending}
-        canSubmit={reason.trim().length >= 10}
-        onClose={onClose}
-        onSubmit={() => mutation.mutate({ reason })}
-      />
-    </ModalShell>
-  )
-}
-
-function NoteModal({
-  mutation, onClose,
-}: { mutation: MutationLike<{ note: string }>; onClose: () => void }) {
-  const [note, setNote] = useState('')
-
-  return (
-    <ModalShell title="Add Note" onClose={onClose}>
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={5}
-        placeholder="Enter your note…"
-        className="w-full text-sm border border-slate-200 rounded-lg p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 mb-4 placeholder-slate-300"
-      />
-      <ModalActions
-        variant="approve"
-        label="Save Note"
-        isPending={mutation.isPending}
-        canSubmit={note.trim().length >= 3}
-        onClose={onClose}
-        onSubmit={() => mutation.mutate({ note })}
-        submitClass="bg-brand-600 hover:bg-brand-700 focus:ring-brand-500"
-      />
-    </ModalShell>
-  )
-}
-
-// ─── Shared sub-components ────────────────────────────────────────────────────
-
-function OverrideSection({
-  override, setOverride, show, setShow,
-}: {
-  override: string
-  setOverride: (v: string) => void
-  show: boolean
-  setShow: (v: boolean) => void
-}) {
-  return (
-    <div className="mb-4">
-      <button
-        onClick={() => setShow(!show)}
-        className="text-xs text-slate-500 hover:text-brand-600 transition-colors flex items-center gap-1"
-      >
-        {show ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        Override AI recommendation
-      </button>
-      {show && (
-        <textarea
-          value={override}
-          onChange={(e) => setOverride(e.target.value)}
-          rows={2}
-          placeholder="Reason for overriding AI recommendation…"
-          className="mt-2 w-full text-xs border border-amber-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-amber-50 placeholder-amber-300"
-        />
-      )}
-    </div>
-  )
-}
-
-function ModalActions({
-  variant, label, isPending, canSubmit, onClose, onSubmit, submitClass,
-}: {
-  variant: string
-  label: string
-  isPending: boolean
-  canSubmit: boolean
-  onClose: () => void
-  onSubmit: () => void
-  submitClass?: string
-}) {
-  return (
-    <div className="flex gap-2 justify-end">
-      <button
-        onClick={onClose}
-        className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={onSubmit}
-        disabled={!canSubmit || isPending}
-        className={clsx(
-          'px-5 py-2 text-sm font-semibold text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-offset-2',
-          submitClass ?? VARIANT_STYLES[variant],
-          (!canSubmit || isPending) && 'opacity-50 cursor-not-allowed',
-        )}
-      >
-        {isPending ? 'Submitting…' : label}
-      </button>
     </div>
   )
 }

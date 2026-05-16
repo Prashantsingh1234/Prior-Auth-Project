@@ -1,263 +1,137 @@
-import { useState, useCallback, useRef } from 'react'
-import { Document, Page, pdfjs } from 'react-pdf'
-import {
-  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2, Download,
-} from 'lucide-react'
-import { clsx } from 'clsx'
-import type { CaseDocument, ExtractedEntity, BoundingBox } from '@/api/types'
-import { useReviewStore } from '@/store/reviewStore'
-import { PanelLoader } from '@/components/common/LoadingSpinner'
-import { apiClient } from '@/api/client'
+﻿import { useState } from 'react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, FileText, Download } from 'lucide-react'
+import { motion } from 'framer-motion'
 
-// Use bundled worker to avoid CORS issues
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+const MOCK_DOCUMENTS = [
+  { id: 'd1', name: 'Clinical Notes.pdf',        type: 'CLINICAL_NOTES',    pages: 4 },
+  { id: 'd2', name: 'Lab Results.pdf',           type: 'LAB_RESULTS',       pages: 2 },
+  { id: 'd3', name: 'Physician Order.pdf',       type: 'PHYSICIAN_ORDER',   pages: 1 },
+  { id: 'd4', name: 'Insurance Card.pdf',        type: 'INSURANCE_CARD',    pages: 1 },
+]
 
-interface DocumentViewerProps {
-  caseId: string
-  documents: CaseDocument[]
-  entities: ExtractedEntity[]
-}
+const MOCK_EXTRACTED_TEXT = `CLINICAL NOTES — PATIENT: MARIA GONZALEZ
+DATE OF SERVICE: 2024-01-15
+ATTENDING: Dr. Robert Stein, MD — Orthopedic Surgery
 
-export function DocumentViewer({ caseId, documents, entities }: DocumentViewerProps) {
-  const [selectedDocId, setSelectedDocId] = useState(documents[0]?.document_id ?? null)
-  const [pdfUrl, setPdfUrl]               = useState<string | null>(null)
-  const [loadError, setLoadError]         = useState<string | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+CHIEF COMPLAINT:
+Patient presents with severe right knee pain, rated 9/10, significantly limiting ambulation. Pain has been progressive over 18 months despite conservative management.
 
-  const {
-    currentPage, totalPages, zoom,
-    setCurrentPage, setTotalPages, setZoom,
-    highlightedEntityId,
-  } = useReviewStore()
+HISTORY OF PRESENT ILLNESS:
+73-year-old female with longstanding severe osteoarthritis of the right knee (ICD-10: M17.11). Patient has failed conservative treatment including:
+• Physical therapy (6 months, 24 sessions) — inadequate pain relief
+• NSAIDs: Naproxen 500mg BID × 3 months — discontinued due to GI intolerance
+• Corticosteroid injections × 3 (last: 2023-10-12) — temporary relief only
+• Viscosupplementation × 1 course — no significant benefit
 
-  const selectedDoc = documents.find((d) => d.document_id === selectedDocId)
+PHYSICAL EXAMINATION:
+• Right knee: severe varus deformity, crepitus with range of motion
+• ROM: Flexion 85°, Extension -15° (flexion contracture)
+• BMI: 28.4 kg/m² (within acceptable surgical range)
+• Neurovascular: intact distally
 
-  // Fetch document blob when selection changes
-  const loadDocument = useCallback(async (docId: string) => {
-    try {
-      setLoadError(null)
-      const response = await apiClient.get(`/cases/${caseId}/documents/${docId}`, {
-        responseType: 'blob',
-      })
-      const url = URL.createObjectURL(response.data as Blob)
-      setPdfUrl(url)
-    } catch {
-      setLoadError('Failed to load document. Please try again.')
-    }
-  }, [caseId])
+RADIOGRAPHIC FINDINGS:
+• AP/Lateral right knee X-rays (2024-01-10): Severe tricompartmental osteoarthritis
+  with bone-on-bone changes, significant joint space narrowing, subchondral sclerosis
+  and osteophyte formation
 
-  const handleDocSelect = (docId: string) => {
-    setSelectedDocId(docId)
-    setCurrentPage(1)
-    loadDocument(docId)
-  }
+ASSESSMENT & PLAN:
+Severe right knee osteoarthritis (M17.11) with significant functional limitation.
+Patient has failed appropriate conservative management. Recommend total knee arthroplasty
+(CPT 27447) as medically necessary.
 
-  // Entities on the current page that should be highlighted
-  const pageEntities = entities.filter(
-    (e) => e.bounding_box?.page === currentPage,
-  )
-  const highlightedEntity = entities.find((e) => e.entity_id === highlightedEntityId)
+Surgical planning: Scheduled 2024-02-15, pre-op evaluation completed.`
+
+export function DocumentViewer() {
+  const [selectedDoc, setSelectedDoc] = useState(MOCK_DOCUMENTS[0])
+  const [page, setPage] = useState(1)
+  const [zoom, setZoom] = useState(100)
 
   return (
-    <div className="flex flex-col h-full bg-slate-800 rounded-xl overflow-hidden">
-      {/* Document tabs */}
-      {documents.length > 1 && (
-        <div className="flex bg-slate-900 border-b border-slate-700 overflow-x-auto flex-shrink-0">
-          {documents.map((doc) => (
-            <button
-              key={doc.document_id}
-              onClick={() => handleDocSelect(doc.document_id)}
-              className={clsx(
-                'px-3 py-2.5 text-xs font-medium whitespace-nowrap border-r border-slate-700 transition-colors',
-                doc.document_id === selectedDocId
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
-              )}
-            >
-              {doc.document_type.replace(/_/g, ' ')}
-              {doc.ocr_confidence != null && (
-                <span className={clsx('ml-1.5 text-xs', doc.ocr_confidence >= 0.85 ? 'text-green-400' : 'text-amber-400')}>
-                  {Math.round(doc.ocr_confidence * 100)}%
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
-        {/* Page navigation */}
-        <div className="flex items-center gap-1">
+    <div className="flex gap-4 h-full">
+      {/* Document list */}
+      <div className="w-48 flex-shrink-0 space-y-1.5">
+        <p className="section-label mb-2">Documents ({MOCK_DOCUMENTS.length})</p>
+        {MOCK_DOCUMENTS.map((doc) => (
           <button
-            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage <= 1}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
+            key={doc.id}
+            onClick={() => { setSelectedDoc(doc); setPage(1) }}
+            className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+              selectedDoc.id === doc.id
+                ? 'border-brand-500/30 bg-brand-500/10 text-brand-400'
+                : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--elevated)]'
+            }`}
           >
-            <ChevronLeft className="w-4 h-4" />
+            <div className="flex items-start gap-2">
+              <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium leading-snug truncate">{doc.name}</p>
+                <p className="text-xs text-[var(--text-3)] mt-0.5">{doc.pages}p</p>
+              </div>
+            </div>
           </button>
-          <span className="text-xs text-slate-300 tabular-nums min-w-[4rem] text-center">
-            {currentPage} / {totalPages}
-          </span>
-          <button
-            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage >= totalPages}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="h-4 w-px bg-slate-700" />
-
-        {/* Zoom controls */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setZoom(zoom - 0.15)}
-            disabled={zoom <= 0.5}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-          <span className="text-xs text-slate-300 tabular-nums w-10 text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => setZoom(zoom + 0.15)}
-            disabled={zoom >= 3.0}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1" />
-
-        {/* OCR confidence */}
-        {selectedDoc?.ocr_confidence != null && (
-          <span className={clsx(
-            'text-xs font-medium px-2 py-0.5 rounded',
-            selectedDoc.ocr_confidence >= 0.85 ? 'text-green-400 bg-green-900/30' :
-            selectedDoc.ocr_confidence >= 0.65 ? 'text-amber-400 bg-amber-900/30' :
-            'text-red-400 bg-red-900/30',
-          )}>
-            OCR {Math.round(selectedDoc.ocr_confidence * 100)}%
-          </span>
-        )}
-
-        <button className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-          <Download className="w-4 h-4" />
-        </button>
+        ))}
       </div>
 
-      {/* PDF canvas */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto flex justify-center py-4 px-2 relative"
-        style={{ background: '#525659' }}
-      >
-        {loadError ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <p className="text-slate-300 text-sm">{loadError}</p>
+      {/* Viewer */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1 bg-[var(--elevated)] rounded-lg p-1 border border-[var(--border)]">
             <button
-              onClick={() => selectedDocId && loadDocument(selectedDocId)}
-              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-1.5 rounded text-[var(--text-2)] hover:text-[var(--text-1)] disabled:opacity-40"
             >
-              Retry
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs text-[var(--text-2)] px-1 tabular-nums">
+              {page} / {selectedDoc.pages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(selectedDoc.pages, p + 1))}
+              disabled={page >= selectedDoc.pages}
+              className="p-1.5 rounded text-[var(--text-2)] hover:text-[var(--text-1)] disabled:opacity-40"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : !pdfUrl ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <PanelLoader />
+
+          <div className="flex items-center gap-1 bg-[var(--elevated)] rounded-lg p-1 border border-[var(--border)]">
             <button
-              onClick={() => selectedDocId && loadDocument(selectedDocId)}
-              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700"
+              onClick={() => setZoom((z) => Math.max(50, z - 25))}
+              className="p-1.5 rounded text-[var(--text-2)] hover:text-[var(--text-1)]"
             >
-              Load Document
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs text-[var(--text-2)] px-1.5 tabular-nums min-w-12 text-center">{zoom}%</span>
+            <button
+              onClick={() => setZoom((z) => Math.min(200, z + 25))}
+              className="p-1.5 rounded text-[var(--text-2)] hover:text-[var(--text-1)]"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : (
-          <div className="relative">
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={({ numPages }) => setTotalPages(numPages)}
-              loading={<PanelLoader />}
-              error={<div className="text-red-400 text-sm p-4">Failed to render PDF.</div>}
-            >
-              <Page
-                pageNumber={currentPage}
-                scale={zoom}
-                loading={<PanelLoader />}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
-            </Document>
 
-            {/* Entity highlight overlays */}
-            {pageEntities.map((entity) => (
-              <EntityOverlay
-                key={entity.entity_id}
-                entity={entity}
-                isHighlighted={entity.entity_id === highlightedEntityId}
-                zoom={zoom}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          <div className="flex-1" />
 
-      {/* Highlighted entity info bar */}
-      {highlightedEntity && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-900/40 border-t border-yellow-700/50 flex-shrink-0">
-          <span className="text-yellow-400 text-xs font-medium">
-            Highlighting:
-          </span>
-          <span className="text-yellow-200 text-xs font-semibold">
-            {highlightedEntity.entity_type.replace(/_/g, ' ')}
-          </span>
-          <span className="text-yellow-300 text-xs">—</span>
-          <span className="text-yellow-100 text-xs truncate">{highlightedEntity.value}</span>
-          <span className={clsx(
-            'ml-auto text-xs font-medium',
-            highlightedEntity.confidence >= 0.85 ? 'text-green-400' :
-            highlightedEntity.confidence >= 0.65 ? 'text-amber-400' : 'text-red-400',
-          )}>
-            {Math.round(highlightedEntity.confidence * 100)}% confidence
-          </span>
+          <button className="btn btn-ghost py-1.5 px-3 text-xs gap-1.5">
+            <Download className="w-3.5 h-3.5" /> Download
+          </button>
         </div>
-      )}
+
+        {/* Document content */}
+        <motion.div
+          key={selectedDoc.id + page}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex-1 bg-white dark:bg-[#1a1a2e] rounded-xl border border-[var(--border)] overflow-auto p-6 shadow-card"
+          style={{ fontSize: `${zoom}%` }}
+        >
+          <pre className="font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+            {MOCK_EXTRACTED_TEXT}
+          </pre>
+        </motion.div>
+      </div>
     </div>
-  )
-}
-
-interface EntityOverlayProps {
-  entity: ExtractedEntity
-  isHighlighted: boolean
-  zoom: number
-}
-
-function EntityOverlay({ entity, isHighlighted, zoom }: EntityOverlayProps) {
-  const bb = entity.bounding_box
-  if (!bb) return null
-
-  return (
-    <div
-      className={clsx(
-        'absolute pointer-events-none rounded transition-all duration-200',
-        isHighlighted
-          ? 'bg-yellow-400/40 ring-2 ring-yellow-400'
-          : 'bg-blue-400/15 ring-1 ring-blue-400/40',
-      )}
-      style={{
-        left:   bb.x * zoom,
-        top:    bb.y * zoom,
-        width:  bb.width * zoom,
-        height: bb.height * zoom,
-      }}
-      title={`${entity.entity_type}: ${entity.value}`}
-    />
   )
 }

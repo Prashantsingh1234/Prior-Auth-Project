@@ -1,181 +1,114 @@
-import { useState, useMemo } from 'react'
-import { clsx } from 'clsx'
-import { Search, ChevronDown, ChevronUp, Eye } from 'lucide-react'
-import type { ExtractedEntity } from '@/api/types'
-import { useReviewStore } from '@/store/reviewStore'
+﻿import { motion } from 'framer-motion'
+import { User, Building2, Pill, Stethoscope, Calendar, Hash } from 'lucide-react'
 import { ConfidenceBar } from '@/components/common/ConfidenceBar'
+import { cn } from '@/lib/utils'
 
-interface ExtractedEntitiesPanelProps {
-  entities: ExtractedEntity[]
+interface Entity {
+  id: string
+  type: string
+  value: string
+  context: string
+  confidence: number
+  source: string
 }
 
-const ENTITY_LABELS: Record<string, string> = {
-  PATIENT_DEMOGRAPHICS: 'Patient Demographics',
-  DIAGNOSIS_CODE:       'Diagnosis Code',
-  PROCEDURE_CODE:       'Procedure Code',
-  MEDICATION:           'Medication',
-  LAB_VALUE:            'Lab Value',
-  COMPLICATION:         'Complication',
-  OTHER:                'Other',
+const ENTITY_ICONS: Record<string, React.ElementType> = {
+  PATIENT:    User,
+  PROVIDER:   Building2,
+  MEDICATION: Pill,
+  DIAGNOSIS:  Stethoscope,
+  DATE:       Calendar,
+  CPT_CODE:   Hash,
+  ICD_CODE:   Hash,
 }
 
-export function ExtractedEntitiesPanel({ entities }: ExtractedEntitiesPanelProps) {
-  const [search, setSearch]       = useState('')
-  const [activeType, setActive]   = useState<string>('All')
-  const [showLowConf, setShowLow] = useState(true)
+const ENTITY_COLOR: Record<string, string> = {
+  PATIENT:    'bg-sky-500/10 border-sky-500/25 text-sky-400',
+  PROVIDER:   'bg-violet-500/10 border-violet-500/25 text-violet-400',
+  MEDICATION: 'bg-amber-500/10 border-amber-500/25 text-amber-400',
+  DIAGNOSIS:  'bg-red-500/10 border-red-500/25 text-red-400',
+  DATE:       'bg-slate-500/10 border-slate-500/25 text-slate-400',
+  CPT_CODE:   'bg-emerald-500/10 border-emerald-500/25 text-emerald-400',
+  ICD_CODE:   'bg-orange-500/10 border-orange-500/25 text-orange-400',
+}
 
-  const {
-    highlightedEntityId,
-    setHighlightedEntity,
-    expandedEntityIds,
-    toggleEntityExpanded,
-  } = useReviewStore()
+const MOCK_ENTITIES: Entity[] = [
+  { id: 'e1', type: 'PATIENT',    value: 'Maria Gonzalez',              context: 'PATIENT: MARIA GONZALEZ',          confidence: 0.99, source: 'page 1' },
+  { id: 'e2', type: 'DIAGNOSIS',  value: 'Severe osteoarthritis M17.11',context: 'severe osteoarthritis of the right knee (ICD-10: M17.11)', confidence: 0.97, source: 'page 1' },
+  { id: 'e3', type: 'CPT_CODE',   value: 'CPT 27447',                   context: 'total knee arthroplasty (CPT 27447)', confidence: 0.98, source: 'page 2' },
+  { id: 'e4', type: 'ICD_CODE',   value: 'M25.361',                     context: 'right knee pain M25.361',           confidence: 0.95, source: 'page 1' },
+  { id: 'e5', type: 'PROVIDER',   value: 'Dr. Robert Stein, MD',        context: 'ATTENDING: Dr. Robert Stein, MD',   confidence: 0.99, source: 'page 1' },
+  { id: 'e6', type: 'MEDICATION', value: 'Naproxen 500mg BID × 3m',    context: 'NSAIDs: Naproxen 500mg BID × 3 months', confidence: 0.93, source: 'page 2' },
+  { id: 'e7', type: 'DATE',       value: '2024-01-15',                  context: 'DATE OF SERVICE: 2024-01-15',        confidence: 0.99, source: 'page 1' },
+  { id: 'e8', type: 'DATE',       value: '2024-02-15',                  context: 'Scheduled 2024-02-15',              confidence: 0.96, source: 'page 3' },
+]
 
-  const entityTypes = ['All', ...Array.from(new Set(entities.map((e) => e.entity_type)))]
+const ENTITY_TYPE_GROUPS = [
+  { type: 'DIAGNOSIS',  label: 'Diagnoses' },
+  { type: 'CPT_CODE',   label: 'Procedures' },
+  { type: 'ICD_CODE',   label: 'ICD Codes' },
+  { type: 'MEDICATION', label: 'Medications' },
+  { type: 'PROVIDER',   label: 'Providers' },
+  { type: 'DATE',       label: 'Dates' },
+]
 
-  const filtered = useMemo(() => {
-    let list = entities
-    if (!showLowConf) list = list.filter((e) => e.confidence >= 0.65)
-    if (activeType !== 'All') list = list.filter((e) => e.entity_type === activeType)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (e) => e.value.toLowerCase().includes(q) ||
-               ENTITY_LABELS[e.entity_type]?.toLowerCase().includes(q),
-      )
-    }
-    return list
-  }, [entities, search, activeType, showLowConf])
-
-  const handleHighlight = (entityId: string) => {
-    setHighlightedEntity(highlightedEntityId === entityId ? null : entityId)
-  }
-
-  if (entities.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
-        <Search className="w-6 h-6 opacity-40" />
-        No extracted entities
-      </div>
-    )
-  }
+export function ExtractedEntitiesPanel() {
+  const grouped = ENTITY_TYPE_GROUPS.map((g) => ({
+    ...g,
+    entities: MOCK_ENTITIES.filter((e) => e.type === g.type),
+  })).filter((g) => g.entities.length > 0)
 
   return (
-    <div className="flex flex-col gap-2 h-full">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search entities…"
-          className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white"
-        />
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--text-1)]">Extracted Clinical Entities</h3>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">{MOCK_ENTITIES.length} entities extracted via NER</p>
+        </div>
+        <span className="chip bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+          High confidence
+        </span>
       </div>
 
-      {/* Type filter */}
-      <div className="flex gap-1 flex-wrap">
-        {entityTypes.map((type) => (
-          <button
-            key={type}
-            onClick={() => setActive(type)}
-            className={clsx(
-              'px-2 py-0.5 text-xs rounded-full border transition-colors',
-              activeType === type
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'text-slate-500 border-slate-200 hover:border-brand-400 hover:text-brand-600',
-            )}
-          >
-            {ENTITY_LABELS[type] ?? type}
-          </button>
-        ))}
-        <button
-          onClick={() => setShowLow((v) => !v)}
-          className={clsx(
-            'ml-auto px-2 py-0.5 text-xs rounded-full border transition-colors flex items-center gap-1',
-            !showLowConf ? 'bg-red-50 text-red-600 border-red-200' : 'text-slate-400 border-slate-200',
-          )}
-        >
-          <Eye className="w-3 h-3" />
-          Low conf
-        </button>
-      </div>
-
-      <p className="text-xs text-slate-400">{filtered.length} of {entities.length} entities</p>
-
-      {/* Entity list */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
-        {filtered.map((entity) => {
-          const isHighlighted = entity.entity_id === highlightedEntityId
-          const isExpanded    = expandedEntityIds.has(entity.entity_id)
-          const hasLocation   = entity.bounding_box != null
-
-          return (
-            <div
-              key={entity.entity_id}
-              className={clsx(
-                'rounded-lg border transition-all duration-150',
-                isHighlighted
-                  ? 'border-yellow-400 bg-yellow-50 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300',
-              )}
-            >
-              <div className="flex items-start gap-2 p-2.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">
-                    {ENTITY_LABELS[entity.entity_type] ?? entity.entity_type.replace(/_/g, ' ')}
-                  </p>
-                  <p className={clsx(
-                    'text-sm font-medium',
-                    isHighlighted ? 'text-yellow-800' : 'text-slate-900',
-                    !isExpanded && 'truncate',
-                  )}>
-                    {entity.normalized_value ?? entity.value}
-                  </p>
-                  {entity.normalized_value && entity.normalized_value !== entity.value && (
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">Raw: {entity.value}</p>
-                  )}
-                  <div className="mt-1.5">
-                    <ConfidenceBar score={entity.confidence} size="sm" showLabel={false} />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1 items-end flex-shrink-0">
-                  {hasLocation && (
-                    <button
-                      onClick={() => handleHighlight(entity.entity_id)}
-                      title={isHighlighted ? 'Remove highlight' : 'Jump to in document'}
-                      className={clsx(
-                        'p-1 rounded transition-colors',
-                        isHighlighted ? 'text-yellow-600 hover:text-yellow-800' : 'text-slate-300 hover:text-brand-500',
-                      )}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {entity.value.length > 30 && (
-                    <button
-                      onClick={() => toggleEntityExpanded(entity.entity_id)}
-                      className="p-1 rounded text-slate-300 hover:text-slate-600 transition-colors"
-                    >
-                      {isExpanded
-                        ? <ChevronUp className="w-3.5 h-3.5" />
-                        : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="px-2.5 pb-2.5 text-xs text-slate-400 border-t border-slate-100 pt-1.5">
-                  {entity.bounding_box && <span>Page {entity.bounding_box.page} · </span>}
-                  Confidence {Math.round(entity.confidence * 100)}%
-                </div>
-              )}
+      {grouped.map(({ type, label, entities }) => {
+        const Icon = ENTITY_ICONS[type] ?? Hash
+        const colorClass = ENTITY_COLOR[type] ?? 'bg-slate-500/10 border-slate-500/25 text-slate-400'
+        return (
+          <div key={type}>
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border', colorClass)}>
+                <Icon className="w-3 h-3" />
+                {label}
+              </span>
+              <span className="text-xs text-[var(--text-3)]">{entities.length}</span>
             </div>
-          )
-        })}
-      </div>
+            <div className="space-y-2">
+              {entities.map((entity, i) => (
+                <motion.div
+                  key={entity.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="card p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-1)]">{entity.value}</p>
+                      <p className="text-xs text-[var(--text-3)] mt-0.5 italic leading-snug">
+                        "…{entity.context}…"
+                      </p>
+                      <p className="text-xs text-[var(--text-3)] mt-1">{entity.source}</p>
+                    </div>
+                    <div className="flex-shrink-0 w-20">
+                      <ConfidenceBar value={entity.confidence} size="sm" showPercent />
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

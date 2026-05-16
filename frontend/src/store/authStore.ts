@@ -1,37 +1,29 @@
-import { create } from 'zustand'
+﻿import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { UserPublic } from '@/api/types'
-import { clearTokens, setTokens } from '@/api/client'
 
-interface AuthState {
-  user: UserPublic | null
-  isAuthenticated: boolean
-  login: (user: UserPublic, accessToken: string, refreshToken: string, remember?: boolean) => void
-  logout: () => void
-  updateUser: (user: UserPublic) => void
+interface AuthUser {
+  id: string
+  name: string
+  email: string
+  role: 'reviewer' | 'admin' | 'provider'
+  avatarUrl?: string
 }
 
-export const useAuthStore = create<AuthState>()(
+interface AuthStore {
+  token: string | null
+  user: AuthUser | null
+  setAuth: (token: string, user: AuthUser) => void
+  clearAuth: () => void
+}
+
+export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
+      token: null,
       user: null,
-      isAuthenticated: false,
-
-      login: (user, accessToken, refreshToken, remember = false) => {
-        setTokens(accessToken, refreshToken, remember)
-        set({ user, isAuthenticated: true })
-      },
-
-      logout: () => {
-        clearTokens()
-        set({ user: null, isAuthenticated: false })
-      },
-
-      updateUser: (user) => set({ user }),
+      setAuth: (token, user) => set({ token, user }),
+      clearAuth: () => set({ token: null, user: null }),
     }),
-    {
-      name: 'pa-auth',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
-    },
-  ),
+    { name: 'pa-auth' }
+  )
 )
