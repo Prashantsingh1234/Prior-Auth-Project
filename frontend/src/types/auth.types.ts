@@ -1,4 +1,4 @@
-﻿export type UserRole = 'reviewer' | 'admin' | 'provider'
+export type UserRole = 'reviewer' | 'admin' | 'provider'
 
 export interface AuthUser {
   id: string
@@ -8,6 +8,7 @@ export interface AuthUser {
   organizationId?: string
   avatarUrl?: string
   permissions: Permission[]
+  mfaEnabled?: boolean
 }
 
 export type Permission =
@@ -72,9 +73,75 @@ export interface AuthState {
 export interface LoginCredentials {
   email: string
   password: string
+  rememberMe?: boolean
 }
 
 export interface LoginResponse {
   user: AuthUser
   tokens: AuthTokens
+  requiresMFA?: boolean
+  mfaChallenge?: MFAChallenge
 }
+
+// ─── MFA ─────────────────────────────────────────────────────────────────────
+
+export type MFAMethod = 'totp' | 'sms' | 'email' | 'backup_code'
+
+export interface MFAChallenge {
+  challengeId: string
+  method: MFAMethod
+  maskedContact?: string
+  expiresAt: number
+}
+
+export interface MFAVerifyRequest {
+  challengeId: string
+  code: string
+  method: MFAMethod
+}
+
+export interface MFAVerifyResponse {
+  user: AuthUser
+  tokens: AuthTokens
+}
+
+// ─── OTP ─────────────────────────────────────────────────────────────────────
+
+export type OTPPurpose = 'mfa' | 'password_reset' | 'email_verification'
+
+export interface OTPVerifyRequest {
+  email: string
+  code: string
+  purpose: OTPPurpose
+}
+
+export interface OTPVerifyResponse {
+  verified: boolean
+  resetToken?: string
+}
+
+// ─── Forgot / Reset Password ──────────────────────────────────────────────────
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ForgotPasswordResponse {
+  message: string
+  maskedEmail: string
+}
+
+export interface ResetPasswordRequest {
+  resetToken: string
+  newPassword: string
+  confirmPassword: string
+}
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+
+export interface SessionInfo {
+  lastActivity: number
+  expiresAt: number
+}
+
+export type SessionTimeoutReason = 'expired' | 'manual' | 'forced'

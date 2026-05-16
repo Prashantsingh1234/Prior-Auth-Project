@@ -1,21 +1,38 @@
-﻿import { create } from 'zustand'
+import { create } from 'zustand'
 import { persist, devtools } from 'zustand/middleware'
-import type { AuthUser, AuthTokens, UserRole, Permission } from '@/types'
+import type { AuthUser, AuthTokens, UserRole, Permission, MFAChallenge } from '@/types'
 import { ROLE_PERMISSIONS } from '@/types'
 
 interface AuthStore {
-  // State
+  // Core auth state
   user:            AuthUser | null
   tokens:          AuthTokens | null
   isAuthenticated: boolean
   isHydrated:      boolean
 
-  // Actions
-  setAuth:    (user: AuthUser, tokens: AuthTokens) => void
-  clearAuth:  () => void
-  setHydrated:(v: boolean) => void
+  // MFA / OTP pending state
+  mfaChallenge:    MFAChallenge | null
+  pendingEmail:    string | null
 
-  // Derived selectors
+  // Session timeout state
+  sessionWarning:  boolean
+  sessionExpiredReason: 'idle' | 'token' | null
+
+  // Auth actions
+  setAuth:          (user: AuthUser, tokens: AuthTokens) => void
+  clearAuth:        () => void
+  setHydrated:      (v: boolean) => void
+  updateTokens:     (tokens: AuthTokens) => void
+
+  // MFA actions
+  setMFAChallenge:  (challenge: MFAChallenge | null) => void
+  setPendingEmail:  (email: string | null) => void
+
+  // Session actions
+  setSessionWarning:(v: boolean) => void
+  setSessionExpired:(reason: 'idle' | 'token') => void
+
+  // RBAC selectors
   can:         (permission: Permission) => boolean
   hasRole:     (role: UserRole) => boolean
   hasAnyRole:  (roles: UserRole[]) => boolean
@@ -25,18 +42,45 @@ export const useAuthStore = create<AuthStore>()(
   devtools(
     persist(
       (set, get) => ({
-        user:            null,
-        tokens:          null,
-        isAuthenticated: false,
-        isHydrated:      false,
+        user:                 null,
+        tokens:               null,
+        isAuthenticated:      false,
+        isHydrated:           false,
+        mfaChallenge:         null,
+        pendingEmail:         null,
+        sessionWarning:       false,
+        sessionExpiredReason: null,
 
         setAuth: (user, tokens) =>
-          set({ user, tokens, isAuthenticated: true }, false, 'auth/setAuth'),
+          set(
+            { user, tokens, isAuthenticated: true, mfaChallenge: null, pendingEmail: null, sessionWarning: false, sessionExpiredReason: null },
+            false,
+            'auth/setAuth'
+          ),
 
         clearAuth: () =>
-          set({ user: null, tokens: null, isAuthenticated: false }, false, 'auth/clearAuth'),
+          set(
+            { user: null, tokens: null, isAuthenticated: false, mfaChallenge: null, pendingEmail: null },
+            false,
+            'auth/clearAuth'
+          ),
 
         setHydrated: (v) => set({ isHydrated: v }, false, 'auth/setHydrated'),
+
+        updateTokens: (tokens) =>
+          set({ tokens }, false, 'auth/updateTokens'),
+
+        setMFAChallenge: (challenge) =>
+          set({ mfaChallenge: challenge }, false, 'auth/setMFAChallenge'),
+
+        setPendingEmail: (email) =>
+          set({ pendingEmail: email }, false, 'auth/setPendingEmail'),
+
+        setSessionWarning: (v) =>
+          set({ sessionWarning: v }, false, 'auth/setSessionWarning'),
+
+        setSessionExpired: (reason) =>
+          set({ sessionExpiredReason: reason }, false, 'auth/setSessionExpired'),
 
         can: (permission) => {
           const role = get().user?.role
@@ -53,7 +97,13 @@ export const useAuthStore = create<AuthStore>()(
       }),
       {
         name: 'pa-auth',
-        partialize: (s) => ({ user: s.user, tokens: s.tokens, isAuthenticated: s.isAuthenticated }),
+        partialize: (s) => ({
+          user:            s.user,
+          tokens:          s.tokens,
+          isAuthenticated: s.isAuthenticated,
+          pendingEmail:    s.pendingEmail,
+          mfaChallenge:    s.mfaChallenge,
+        }),
         onRehydrateStorage: () => (state) => {
           state?.setHydrated(true)
         },

@@ -1,5 +1,12 @@
-﻿export const ROUTES = {
-  LOGIN:      '/login',
+export const ROUTES = {
+  // Public auth
+  LOGIN:            '/login',
+  FORGOT_PASSWORD:  '/auth/forgot-password',
+  RESET_PASSWORD:   '/auth/reset-password',
+  MFA:              '/auth/mfa',
+  OTP:              '/auth/otp',
+
+  // Protected app
   DASHBOARD:  '/dashboard',
   CASES:      '/cases',
   CASE:       '/cases/:caseId',
@@ -9,6 +16,7 @@
   AUDIT:      '/audit',
   MONITORING: '/monitoring',
   SETTINGS:   '/settings',
+  USERS:      '/admin/users',
 } as const
 
 export type RouteKey = keyof typeof ROUTES
@@ -20,3 +28,10 @@ export function buildRoute(route: string, params: Record<string, string>): strin
     route
   )
 }
+
+/** Role-based default landing page after login */
+export const ROLE_HOME = {
+  admin:    ROUTES.DASHBOARD,
+  reviewer: ROUTES.DASHBOARD,
+  provider: ROUTES.CASES,
+} as const

@@ -1,27 +1,34 @@
-﻿import { useEffect } from 'react'
+import { useSessionTimeout } from '@/features/auth/hooks/useSessionTimeout'
+import { SessionTimeoutModal } from '@/features/auth/components/SessionTimeoutModal'
 import { useAuthStore } from '@/store'
-import { APP_CONFIG } from '@/config/app.config'
 
 interface Props { children: React.ReactNode }
 
+function SessionGuard() {
+  const { millisRemaining, showWarning, isContinuing, continueSession, signOut } = useSessionTimeout()
+
+  return (
+    <SessionTimeoutModal
+      open={showWarning}
+      millisRemaining={millisRemaining}
+      onContinue={continueSession}
+      onSignOut={signOut}
+      isContinuing={isContinuing}
+    />
+  )
+}
+
 /**
- * Handles proactive token expiry detection.
- * Checks every minute; clears auth and redirects if within the refresh buffer.
+ * AuthProvider wires up session timeout warning + auto-logout.
+ * Only renders the guard when there's an active session.
  */
 export function AuthProvider({ children }: Props) {
-  const { tokens, clearAuth } = useAuthStore()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
-  useEffect(() => {
-    if (!tokens) return
-    const interval = setInterval(() => {
-      const expiresIn = tokens.expiresAt - Date.now()
-      if (expiresIn < APP_CONFIG.auth.tokenRefreshBufferMs) {
-        clearAuth()
-        window.location.href = '/login'
-      }
-    }, 60_000)
-    return () => clearInterval(interval)
-  }, [tokens, clearAuth])
-
-  return <>{children}</>
+  return (
+    <>
+      {children}
+      {isAuthenticated && <SessionGuard />}
+    </>
+  )
 }
