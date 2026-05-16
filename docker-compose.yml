@@ -157,6 +157,45 @@ services:
     restart: unless-stopped
 
   # --------------------------------------------------------
+  # PA Async Worker — task queue consumers
+  # --------------------------------------------------------
+  pa-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: pa-review-platform:dev
+    container_name: pa-worker
+    <<: *app-env
+    command: ["python", "-m", "app.queues.runner"]
+    environment:
+      ENVIRONMENT: development
+      LOG_FORMAT: console
+      DB_HOST: mysql
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
+      WORKER_MAX_RETRIES: "3"
+      RABBITMQ_PREFETCH_COUNT: "5"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "com.pa-platform.service=worker"
+      - "com.pa-platform.version=0.1.0"
+    # Scale with: docker compose up --scale pa-worker=3
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+
+  # --------------------------------------------------------
   # Prometheus — Metrics Collection
   # --------------------------------------------------------
   prometheus:

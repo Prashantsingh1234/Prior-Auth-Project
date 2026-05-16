@@ -138,9 +138,22 @@ class Settings(BaseSettings):
     # RabbitMQ (Async Queue)
     # ----------------------------------------------------------
     rabbitmq_url: str = Field(default="amqp://guest:guest@localhost:5672/")
+    # Legacy single-queue names kept for backward compat
     rabbitmq_pa_queue: str = Field(default="pa.requests")
     rabbitmq_notification_queue: str = Field(default="pa.notifications")
     rabbitmq_prefetch_count: int = Field(default=10)
+    # Per-task-type queue names (used by topology + workers)
+    rabbitmq_ingestion_queue: str  = Field(default="pa.ingestion")
+    rabbitmq_ocr_queue: str        = Field(default="pa.ocr")
+    rabbitmq_embedding_queue: str  = Field(default="pa.embedding")
+    rabbitmq_evaluation_queue: str = Field(default="pa.evaluation")
+    # Exchange names
+    rabbitmq_exchange: str       = Field(default="pa.direct")
+    rabbitmq_dlx: str            = Field(default="pa.dlx")
+    rabbitmq_retry_exchange: str = Field(default="pa.retry")
+    # Worker behaviour
+    worker_max_retries: int          = Field(default=3, ge=0, le=10)
+    worker_retry_delay_seconds: float = Field(default=5.0, ge=0.5, le=300.0)
 
     # ----------------------------------------------------------
     # Logging
