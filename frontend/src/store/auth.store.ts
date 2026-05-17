@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, devtools } from 'zustand/middleware'
 import type { AuthUser, AuthTokens, UserRole, Permission, MFAChallenge } from '@/types'
 import { ROLE_PERMISSIONS } from '@/types'
+import { tokenVault } from '@/lib/tokenVault'
 
 interface AuthStore {
   // Core auth state
@@ -51,24 +52,31 @@ export const useAuthStore = create<AuthStore>()(
         sessionWarning:       false,
         sessionExpiredReason: null,
 
-        setAuth: (user, tokens) =>
+        setAuth: (user, tokens) => {
+          // Store tokens in the secure vault — NOT in localStorage
+          tokenVault.setTokens(tokens.accessToken, tokens.expiresAt, tokens.refreshToken)
           set(
             { user, tokens, isAuthenticated: true, mfaChallenge: null, pendingEmail: null, sessionWarning: false, sessionExpiredReason: null },
             false,
-            'auth/setAuth'
-          ),
+            'auth/setAuth',
+          )
+        },
 
-        clearAuth: () =>
+        clearAuth: () => {
+          tokenVault.clearTokens()
           set(
             { user: null, tokens: null, isAuthenticated: false, mfaChallenge: null, pendingEmail: null },
             false,
-            'auth/clearAuth'
-          ),
+            'auth/clearAuth',
+          )
+        },
 
         setHydrated: (v) => set({ isHydrated: v }, false, 'auth/setHydrated'),
 
-        updateTokens: (tokens) =>
-          set({ tokens }, false, 'auth/updateTokens'),
+        updateTokens: (tokens) => {
+          tokenVault.updateAccessToken(tokens.accessToken, tokens.expiresAt)
+          set({ tokens }, false, 'auth/updateTokens')
+        },
 
         setMFAChallenge: (challenge) =>
           set({ mfaChallenge: challenge }, false, 'auth/setMFAChallenge'),
@@ -99,7 +107,8 @@ export const useAuthStore = create<AuthStore>()(
         name: 'pa-auth',
         partialize: (s) => ({
           user:            s.user,
-          tokens:          s.tokens,
+          // tokens intentionally excluded — access token stays in memory,
+          // refresh token stays in sessionStorage via tokenVault
           isAuthenticated: s.isAuthenticated,
           pendingEmail:    s.pendingEmail,
           mfaChallenge:    s.mfaChallenge,

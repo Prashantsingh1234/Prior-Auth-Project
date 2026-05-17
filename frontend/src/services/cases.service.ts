@@ -1,4 +1,5 @@
 ﻿import http from './http.service'
+import { sanitizeFilename } from '@/lib/sanitize'
 import type { PACase, CaseListItem, PaginatedCases, CaseFilters } from '@/types'
 import type { PaginationParams } from '@/types'
 
@@ -24,8 +25,10 @@ export const casesService = {
     onProgress?: (pct: number) => void,
   ): Promise<{ id: string; filename: string }> {
     const fd = new FormData()
-    fd.append('file', file)
-    fd.append('document_type', documentType)
+    // Pass sanitized filename as the third argument to prevent path traversal
+    // in the Content-Disposition header sent to the server.
+    fd.append('file', file, sanitizeFilename(file.name))
+    fd.append('document_type', documentType.replace(/[^a-zA-Z0-9_\-]/g, ''))
     return http.upload(`${BASE}/${caseId}/documents`, fd, onProgress)
   },
 

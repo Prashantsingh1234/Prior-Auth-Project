@@ -1,6 +1,7 @@
-﻿import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { cn, formatFileSize } from '@/lib/utils'
+import { validateUploadFile } from '@/lib/fileValidation'
 import type { UploadFile } from '../types'
 import { APP_CONFIG } from '@/config/app.config'
 
@@ -14,22 +15,47 @@ interface UploadZoneProps {
 }
 
 export function UploadZone({ files, onFilesAdded, onRemove, onUploadAll, documentType, disabled }: UploadZoneProps) {
-  const [dragging, setDragging] = useState(false)
+  const [dragging,  setDragging]  = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [fileErrors, setFileErrors] = useState<string[]>([])
+
+  const processFiles = useCallback(async (fileList: File[]) => {
+    setValidating(true)
+    setFileErrors([])
+
+    const results = await Promise.allSettled(
+      fileList.map(async (file) => ({ file, ...(await validateUploadFile(file)) })),
+    )
+
+    const valid:  File[]   = []
+    const errors: string[] = []
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        if (r.value.valid) {
+          valid.push(r.value.file)
+        } else {
+          errors.push(`${r.value.file.name}: ${r.value.error}`)
+        }
+      }
+    }
+
+    if (valid.length)  onFilesAdded(valid, documentType)
+    if (errors.length) setFileErrors(errors)
+    setValidating(false)
+  }, [documentType, onFilesAdded])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    const dropped = Array.from(e.dataTransfer.files).filter((f) =>
-      APP_CONFIG.upload.acceptedMimeTypes.includes(f.type as any)
-    )
-    if (dropped.length) onFilesAdded(dropped, documentType)
-  }, [documentType, onFilesAdded])
+    processFiles(Array.from(e.dataTransfer.files))
+  }, [processFiles])
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
-    if (selected.length) onFilesAdded(selected, documentType)
+    if (selected.length) processFiles(selected)
     e.target.value = ''
-  }, [documentType, onFilesAdded])
+  }, [processFiles])
 
   const pendingCount = files.filter((f) => f.status === 'idle').length
 
@@ -44,18 +70,42 @@ export function UploadZone({ files, onFilesAdded, onRemove, onUploadAll, documen
           dragging
             ? 'border-brand-400 bg-brand-500/10'
             : 'border-[var(--border)] hover:border-brand-500/50 hover:bg-brand-500/5',
-          disabled && 'pointer-events-none opacity-50'
+          (disabled || validating) && 'pointer-events-none opacity-50',
         )}
       >
-        <Upload className="w-8 h-8 text-[var(--text-3)]" />
+        {validating
+          ? <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+          : <Upload className="w-8 h-8 text-[var(--text-3)]" />
+        }
         <div className="text-center">
-          <p className="text-sm font-medium text-[var(--text-1)]">Drop files here or click to browse</p>
+          <p className="text-sm font-medium text-[var(--text-1)]">
+            {validating ? 'Verifying files…' : 'Drop files here or click to browse'}
+          </p>
           <p className="text-xs text-[var(--text-3)] mt-1">
-            PDF, JPEG, PNG, TIFF — max {APP_CONFIG.upload.maxFileSizeMb}MB each
+            PDF, JPEG, PNG, TIFF — max {APP_CONFIG.upload.maxFileSizeMb} MB each
           </p>
         </div>
-        <input type="file" className="hidden" multiple accept=".pdf,.jpg,.jpeg,.png,.tiff" onChange={handleChange} />
+        <input
+          type="file"
+          className="hidden"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.tiff"
+          onChange={handleChange}
+          disabled={disabled || validating}
+        />
       </label>
+
+      {/* Validation errors */}
+      {fileErrors.length > 0 && (
+        <div className="space-y-1">
+          {fileErrors.map((err, i) => (
+            <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{err}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {files.length > 0 && (
         <div className="space-y-2">
@@ -69,18 +119,18 @@ export function UploadZone({ files, onFilesAdded, onRemove, onUploadAll, documen
                     <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${f.progress}%` }} />
                   </div>
                 )}
-                {f.status === 'error' && (
-                  <p className="text-xs text-red-400 mt-0.5">{f.error}</p>
-                )}
-                {f.status === 'idle' && (
-                  <p className="text-xs text-[var(--text-3)]">{formatFileSize(f.file.size)}</p>
-                )}
+                {f.status === 'error'  && <p className="text-xs text-red-400 mt-0.5">{f.error}</p>}
+                {f.status === 'idle'   && <p className="text-xs text-[var(--text-3)]">{formatFileSize(f.file.size)}</p>}
               </div>
-              {f.status === 'uploading' && <Loader2 className="w-4 h-4 animate-spin text-brand-400 flex-shrink-0" />}
+              {f.status === 'uploading' && <Loader2    className="w-4 h-4 animate-spin text-brand-400 flex-shrink-0" />}
               {f.status === 'success'   && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
               {f.status === 'error'     && <AlertCircle  className="w-4 h-4 text-red-400 flex-shrink-0" />}
               {(f.status === 'idle' || f.status === 'error') && (
-                <button onClick={() => onRemove(f.id)} className="text-[var(--text-3)] hover:text-red-400 flex-shrink-0">
+                <button
+                  onClick={() => onRemove(f.id)}
+                  aria-label={`Remove ${f.file.name}`}
+                  className="text-[var(--text-3)] hover:text-red-400 flex-shrink-0"
+                >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -88,7 +138,7 @@ export function UploadZone({ files, onFilesAdded, onRemove, onUploadAll, documen
           ))}
 
           {pendingCount > 0 && (
-            <button onClick={onUploadAll} className="btn btn-primary w-full text-sm" disabled={disabled}>
+            <button onClick={onUploadAll} className="btn btn-primary w-full text-sm" disabled={disabled || validating}>
               Upload {pendingCount} file{pendingCount !== 1 ? 's' : ''}
             </button>
           )}

@@ -5,7 +5,18 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 import { APP_CONFIG } from '@/config/app.config'
+import { tokenVault  } from '@/lib/tokenVault'
 import type { ApiError } from '@/types'
+
+// ─── Request ID ───────────────────────────────────────────────────────────────
+// Each request gets a unique ID for server-side tracing (correlates FE errors
+// with backend logs via the X-Request-ID header).
+
+function generateRequestId(): string {
+  const ts  = Date.now().toString(36)
+  const rnd = Math.random().toString(36).slice(2, 7)
+  return `req_${ts}_${rnd}`
+}
 
 // ─── Token refresh queue ──────────────────────────────────────────────────────
 // Prevents duplicate refresh calls when multiple 401s arrive simultaneously.
@@ -22,34 +33,9 @@ function drainQueue(token: string | null) {
   _refreshQueue = []
 }
 
-function readStoredState(): { accessToken?: string; refreshToken?: string } {
-  try {
-    const raw = localStorage.getItem('pa-auth')
-    if (!raw) return {}
-    const { state } = JSON.parse(raw)
-    return {
-      accessToken:  state?.tokens?.accessToken,
-      refreshToken: state?.tokens?.refreshToken,
-    }
-  } catch {
-    return {}
-  }
-}
-
-function clearStoredAuth() {
-  localStorage.removeItem('pa-auth')
-}
-
-function updateStoredTokens(tokens: { accessToken: string; expiresAt: number; refreshToken?: string }) {
-  try {
-    const raw = localStorage.getItem('pa-auth')
-    if (!raw) return
-    const parsed = JSON.parse(raw)
-    parsed.state.tokens = { ...parsed.state.tokens, ...tokens }
-    localStorage.setItem('pa-auth', JSON.stringify(parsed))
-  } catch {
-    // storage unavailable
-  }
+function clearStoredSession() {
+  tokenVault.clearTokens()
+  localStorage.removeItem('pa-auth')   // clear persisted Zustand auth state
 }
 
 // ─── Axios singleton ──────────────────────────────────────────────────────────
@@ -63,19 +49,24 @@ export function getHttpClient(): AxiosInstance {
     baseURL: APP_CONFIG.api.baseUrl,
     timeout: APP_CONFIG.api.timeout,
     headers: {
-      'Content-Type': 'application/json',
-      'X-Client':     `pa-ui/${APP_CONFIG.version ?? '0.1.0'}`,
+      'Content-Type':  'application/json',
+      'X-Client':      `pa-ui/${APP_CONFIG.version ?? '0.1.0'}`,
+      'X-Requested-With': 'XMLHttpRequest',  // helps server distinguish AJAX from form posts
     },
   })
 
-  // ── Request: attach JWT ────────────────────────────────────────────────────
+  // ── Request: attach JWT + tracing headers ─────────────────────────────────
   _instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-    const { accessToken } = readStoredState()
-    if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
+    const token = tokenVault.getAccessToken()
+    if (token) config.headers.Authorization = `Bearer ${token}`
+
+    // Unique ID per request — correlates FE errors with server logs
+    config.headers['X-Request-ID'] = generateRequestId()
+
     return config
   })
 
-  // ── Response: handle 401 with silent refresh ───────────────────────────────
+  // ── Response: handle 401 with silent refresh ──────────────────────────────
   _instance.interceptors.response.use(
     (res) => res,
     async (error: AxiosError) => {
@@ -83,11 +74,10 @@ export function getHttpClient(): AxiosInstance {
       const status = error.response?.status
 
       if (status === 401 && !originalRequest._retry) {
-        const { refreshToken } = readStoredState()
+        const refreshToken = tokenVault.getRefreshToken()
 
         if (refreshToken) {
           if (_isRefreshing) {
-            // Wait for the current refresh to finish
             return new Promise((resolve, reject) => {
               enqueueAfterRefresh((token) => {
                 if (token) {
@@ -107,39 +97,51 @@ export function getHttpClient(): AxiosInstance {
             const { data } = await axios.post(
               `${APP_CONFIG.api.baseUrl}/auth/refresh`,
               { refreshToken },
-              { headers: { 'Content-Type': 'application/json' } }
+              { headers: { 'Content-Type': 'application/json' } },
             )
             const newTokens = data.tokens
-            updateStoredTokens(newTokens)
+            tokenVault.updateAccessToken(newTokens.accessToken, newTokens.expiresAt)
+            if (newTokens.refreshToken) {
+              // Server rotated the refresh token — persist the new one
+              tokenVault.setTokens(newTokens.accessToken, newTokens.expiresAt, newTokens.refreshToken)
+            }
             drainQueue(newTokens.accessToken)
             originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`
             return _instance!.request(originalRequest)
           } catch {
             drainQueue(null)
-            clearStoredAuth()
+            clearStoredSession()
             window.location.href = '/login?reason=session_expired'
             return Promise.reject(error)
           } finally {
             _isRefreshing = false
           }
         } else {
-          clearStoredAuth()
+          clearStoredSession()
           window.location.href = '/login?reason=session_expired'
         }
       }
 
+      // ── Sanitise error before surfacing to UI ────────────────────────────
+      // Never leak internal server details — map to the ApiError shape only.
       const apiError: ApiError = {
         statusCode:  status ?? 0,
-        message:     (error.response?.data as any)?.detail
-                     ?? error.message
-                     ?? 'An unexpected error occurred',
+        message:     sanitiseServerMessage(
+                       (error.response?.data as any)?.detail ?? error.message,
+                     ),
         fieldErrors: (error.response?.data as any)?.errors,
       }
       return Promise.reject(apiError)
-    }
+    },
   )
 
   return _instance
+}
+
+// Strip any HTML/script content a backend error message might contain
+function sanitiseServerMessage(raw: unknown): string {
+  if (typeof raw !== 'string') return 'An unexpected error occurred'
+  return raw.replace(/<[^>]*>/g, '').slice(0, 500).trim() || 'An unexpected error occurred'
 }
 
 // ─── Typed helper methods ─────────────────────────────────────────────────────

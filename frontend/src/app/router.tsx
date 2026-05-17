@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { ROUTES, ROLE_HOME } from '@/config/routes.config'
 import { useAuthStore } from '@/store'
 import { usePermissions } from '@/hooks'
+import { tokenVault } from '@/lib/tokenVault'
 import { SuspenseBoundary } from '@/components/layout/SuspenseBoundary'
 import { ErrorBoundary }    from '@/components/layout/ErrorBoundary'
 import { AppShell }         from '@/components/layout/AppShell'
@@ -38,9 +39,18 @@ function RequireAuth() {
 
   if (!isHydrated) return null
 
-  return isAuthenticated
-    ? <Outlet />
-    : <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
+  if (!isAuthenticated) {
+    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
+  }
+
+  // If the Zustand state says "authenticated" but both vault slots are empty,
+  // the session has truly ended (page refresh in a new tab, or sessionStorage cleared).
+  // Redirect proactively rather than waiting for the first 401.
+  if (!tokenVault.hasSession()) {
+    return <Navigate to={`${ROUTES.LOGIN}?reason=session_ended`} state={{ from: location }} replace />
+  }
+
+  return <Outlet />
 }
 
 function RequireGuest() {

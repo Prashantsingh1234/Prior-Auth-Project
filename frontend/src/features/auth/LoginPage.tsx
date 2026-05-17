@@ -7,12 +7,13 @@ import { Link } from 'react-router-dom'
 import { Eye, EyeOff, Lock, AlertCircle, ChevronRight, Stethoscope } from 'lucide-react'
 import { AuthLayout } from './components/AuthLayout'
 import { useLogin } from './hooks/useLogin'
+import { useRateLimit } from '@/hooks/useRateLimit'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/config/routes.config'
 
 const schema = z.object({
-  email:      z.string().email('Enter a valid email address'),
-  password:   z.string().min(1, 'Password is required'),
+  email:      z.string().trim().email('Enter a valid email address').max(254),
+  password:   z.string().min(1, 'Password is required').max(128),
   rememberMe: z.boolean().optional(),
 })
 type FormData = z.infer<typeof schema>
@@ -49,6 +50,9 @@ export function LoginPage() {
   const [apiError, setApiError]   = useState<string | null>(null)
   const { mutate: login, isPending } = useLogin()
 
+  // 5 attempts per 15 minutes — matches typical HIPAA brute-force policy
+  const { isLimited, attempt, cooldownMs } = useRateLimit(5, 15 * 60_000)
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { rememberMe: false },
@@ -56,6 +60,11 @@ export function LoginPage() {
   const email = watch('email')
 
   const onSubmit = (data: FormData) => {
+    if (!attempt()) {
+      const remaining = Math.ceil(cooldownMs() / 60_000)
+      setApiError(`Too many sign-in attempts. Please wait ${remaining} minute${remaining !== 1 ? 's' : ''} before trying again.`)
+      return
+    }
     setApiError(null)
     login(
       { email: data.email, password: data.password, rememberMe: data.rememberMe },
@@ -190,9 +199,9 @@ export function LoginPage() {
         {/* Submit */}
         <motion.button
           type="submit"
-          disabled={isPending}
-          whileHover={!isPending ? { scale: 1.01 } : {}}
-          whileTap={!isPending ? { scale: 0.98 } : {}}
+          disabled={isPending || isLimited}
+          whileHover={!isPending && !isLimited ? { scale: 1.01 } : {}}
+          whileTap={!isPending && !isLimited ? { scale: 0.98 } : {}}
           className={cn(
             'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white',
             'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500',
