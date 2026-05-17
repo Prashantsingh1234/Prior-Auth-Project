@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery }            from '@tanstack/react-query'
+import { metricsApi, type MetricsResponse } from '@/api/metrics'
+import { APP_CONFIG }          from '@/config/app.config'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -170,15 +172,38 @@ function randomEvent(): ActivityEvent {
   return { ...base, id: crypto.randomUUID(), timestamp: new Date() }
 }
 
+// ─── Metrics → KPI transform ──────────────────────────────────────────────────
+
+function toKPIMetrics(m: MetricsResponse): KPIMetrics {
+  return {
+    totalCases:    m.total_cases,
+    approvedCases: m.approved_cases,
+    deniedCases:   m.denied_cases,
+    pendingCases:  m.pending_cases,
+    inReviewCases: m.in_review_cases,
+    approvalRate:  m.approval_rate,
+    denialRate:    m.denial_rate,
+    avgReviewMs:   m.avg_review_ms,
+    aiAccuracy:    m.ai_accuracy,
+    weekDelta:     m.week_delta,
+  }
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useKPIMetrics() {
   return useQuery({
     queryKey:        ['dashboard', 'kpi'],
-    queryFn:         () => Promise.resolve(buildKPI(Math.floor(Date.now() / 30_000))),
-    staleTime:       25_000,
-    refetchInterval: 30_000,
+    queryFn:         async () => {
+      const m = await metricsApi.get()
+      return toKPIMetrics(m)
+    },
+    staleTime:       APP_CONFIG.cache.metricsStaleMs,
+    refetchInterval: APP_CONFIG.cache.metricsStaleMs,
+    // Show mock data immediately while first fetch runs
     placeholderData: (prev) => prev ?? buildKPI(0),
+    // Don't let a failing metrics endpoint break the whole dashboard
+    retry: (count, err: any) => err?.statusCode >= 500 && count < 2,
   })
 }
 
