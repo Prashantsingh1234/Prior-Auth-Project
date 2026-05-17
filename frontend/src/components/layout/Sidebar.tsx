@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot, Table2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
@@ -82,6 +82,12 @@ const PRIMARY_NAV: NavItem[] = [
     to: '/realtime',
     icon: Activity,
     label: 'Live Updates',
+    permission: 'cases:read',
+  },
+  {
+    to: '/tables',
+    icon: Table2,
+    label: 'Data Tables',
     permission: 'cases:read',
   },
   {

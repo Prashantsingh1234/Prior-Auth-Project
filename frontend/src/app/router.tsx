@@ -26,6 +26,7 @@ const MonitoringPage             = lazy(() => import('@/features/monitoring/Moni
 const PoliciesPage               = lazy(() => import('@/features/policies/PoliciesPage').then((m) => ({ default: m.PoliciesPage })))
 const AuditLogPage               = lazy(() => import('@/features/audit/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
 const RealtimePage               = lazy(() => import('@/features/realtime/RealtimePage').then((m) => ({ default: m.RealtimePage })))
+const TablesPage                 = lazy(() => import('@/features/tables/TablesPage').then((m) => ({ default: m.TablesPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -191,6 +192,12 @@ export function AppRouter() {
             <Route
               path="/realtime"
               element={<Page><RealtimePage /></Page>}
+            />
+
+            {/* Enterprise tables */}
+            <Route
+              path="/tables"
+              element={<Page><TablesPage /></Page>}
             />
 
             {/* Audit — reviewer + admin */}
