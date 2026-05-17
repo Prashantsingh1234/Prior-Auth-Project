@@ -25,6 +25,7 @@ const ReviewerWorkflowPage       = lazy(() => import('@/features/workflow/Review
 const MonitoringPage             = lazy(() => import('@/features/monitoring/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
 const PoliciesPage               = lazy(() => import('@/features/policies/PoliciesPage').then((m) => ({ default: m.PoliciesPage })))
 const AuditLogPage               = lazy(() => import('@/features/audit/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
+const RealtimePage               = lazy(() => import('@/features/realtime/RealtimePage').then((m) => ({ default: m.RealtimePage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -185,6 +186,12 @@ export function AppRouter() {
                 element={<Page><div className="p-8 text-[var(--text-1)]">Settings</div></Page>}
               />
             </Route>
+
+            {/* Real-time architecture */}
+            <Route
+              path="/realtime"
+              element={<Page><RealtimePage /></Page>}
+            />
 
             {/* Audit — reviewer + admin */}
             <Route element={<RequirePermission permission="audit:read" />}>

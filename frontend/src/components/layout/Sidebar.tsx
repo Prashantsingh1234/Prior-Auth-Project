@@ -79,6 +79,12 @@ const PRIMARY_NAV: NavItem[] = [
     permission: 'analytics:read',
   },
   {
+    to: '/realtime',
+    icon: Activity,
+    label: 'Live Updates',
+    permission: 'cases:read',
+  },
+  {
     to: '/audit',
     icon: FileText,
     label: 'Audit Log',

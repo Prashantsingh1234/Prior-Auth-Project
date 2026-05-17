@@ -6,11 +6,14 @@ import { BreadcrumbNav }       from './BreadcrumbNav'
 import { CommandPalette }      from './CommandPalette'
 import { NotificationsPanel }  from './NotificationsPanel'
 import { AIAssistantPanel }    from './AIAssistantPanel'
+import { ReconnectBanner, SystemAlertBanner } from '@/components/realtime'
 import { useUIStore }          from '@/store/uiStore'
+import { useWebSocketBridge }  from '@/hooks/useWebSocket'
 import { cn }                  from '@/lib/utils'
 
 export function AppShell() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
+  useWebSocketBridge()
 
   return (
     <div className="flex h-screen bg-[var(--bg)] overflow-hidden">
@@ -44,6 +47,8 @@ export function AppShell() {
       <CommandPalette />
       <NotificationsPanel />
       <AIAssistantPanel />
+      <ReconnectBanner />
+      <SystemAlertBanner />
     </div>
   )
 }
