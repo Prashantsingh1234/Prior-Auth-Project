@@ -24,6 +24,7 @@ const ClarificationPage          = lazy(() => import('@/features/clarifications/
 const ReviewerWorkflowPage       = lazy(() => import('@/features/workflow/ReviewerWorkflowPage').then((m) => ({ default: m.ReviewerWorkflowPage })))
 const MonitoringPage             = lazy(() => import('@/features/monitoring/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
 const PoliciesPage               = lazy(() => import('@/features/policies/PoliciesPage').then((m) => ({ default: m.PoliciesPage })))
+const AuditLogPage               = lazy(() => import('@/features/audit/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -189,7 +190,7 @@ export function AppRouter() {
             <Route element={<RequirePermission permission="audit:read" />}>
               <Route
                 path={ROUTES.AUDIT}
-                element={<Page><div className="p-8 text-[var(--text-1)]">Audit Log</div></Page>}
+                element={<Page><AuditLogPage /></Page>}
               />
             </Route>
 
