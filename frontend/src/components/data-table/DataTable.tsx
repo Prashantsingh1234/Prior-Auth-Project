@@ -149,7 +149,7 @@ function FilterPanel({ filterDefs, columnFilters, onFilterChange, onClearAll }: 
       className="overflow-hidden border-b"
       style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
     >
-      <div className="px-4 py-3 flex flex-wrap gap-3 items-end">
+      <div className="px-3 sm:px-4 py-3 flex flex-wrap gap-2 sm:gap-3 items-end">
         {filterDefs.map((def) => (
           <FilterControl key={def.id} def={def} value={getVal(def.id)} onChange={(v) => onFilterChange(def.id, v)} />
         ))}
@@ -448,10 +448,12 @@ function PaginationBar<TData>({ table, total }: { table: TTable<TData>; total: n
   const end   = Math.min(start + pageSize - 1, total)
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-t flex-shrink-0"
+    <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-t flex-shrink-0 gap-2"
          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-[var(--text-4)]">Rows per page:</span>
+
+      {/* Rows per page — hidden on mobile */}
+      <div className="hidden sm:flex items-center gap-2">
+        <span className="text-[10px] text-[var(--text-4)]">Rows:</span>
         {PAGE_SIZES.map((s) => (
           <button key={s}
             onClick={() => table.setPageSize(s)}
@@ -463,14 +465,19 @@ function PaginationBar<TData>({ table, total }: { table: TTable<TData>; total: n
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Row count — always visible */}
+      <span className="text-[10px] text-[var(--text-4)] sm:hidden">
+        {total.toLocaleString()} rows
+      </span>
+
+      <div className="flex items-center gap-2 sm:gap-3">
         <span className="text-[10px] text-[var(--text-4)]">
-          {start}–{end} of {total.toLocaleString()}
+          {start}–{end} / {total.toLocaleString()}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           <button onClick={() => table.firstPage()} disabled={!table.getCanPreviousPage()}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[var(--text-4)] disabled:opacity-30 hover:bg-[var(--elevated)] transition-colors">
-            <ChevronLeft className="w-3 h-3" />
+                  className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded text-[var(--text-4)] disabled:opacity-30 hover:bg-[var(--elevated)] transition-colors">
+            <ChevronLeft className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
           </button>
           {Array.from({ length: Math.min(5, table.getPageCount()) }, (_, i) => {
             const page = Math.max(0, Math.min(
@@ -479,15 +486,15 @@ function PaginationBar<TData>({ table, total }: { table: TTable<TData>; total: n
             ))
             return (
               <button key={page} onClick={() => table.setPageIndex(page)}
-                      className={cn('w-6 h-6 text-[10px] rounded transition-colors',
+                      className={cn('w-7 h-7 sm:w-6 sm:h-6 text-[10px] rounded transition-colors',
                         page === pageIndex ? 'bg-sky-500/20 text-sky-400 font-semibold' : 'text-[var(--text-4)] hover:bg-[var(--elevated)]')}>
                 {page + 1}
               </button>
             )
           })}
           <button onClick={() => table.lastPage()} disabled={!table.getCanNextPage()}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[var(--text-4)] disabled:opacity-30 hover:bg-[var(--elevated)] transition-colors">
-            <ChevRight className="w-3 h-3" />
+                  className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded text-[var(--text-4)] disabled:opacity-30 hover:bg-[var(--elevated)] transition-colors">
+            <ChevRight className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
           </button>
         </div>
       </div>
@@ -706,123 +713,137 @@ export function DataTable<TData>({
          style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
-           style={{ borderColor: 'var(--border)', background: 'var(--elevated)' }}>
+      <div className="border-b flex-shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--elevated)' }}>
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-4)]" />
-          <input
-            value={searchInput}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search…"
-            className="w-full h-7 pl-8 pr-3 text-xs rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] focus:outline-none focus:border-sky-500 transition-colors"
-          />
-          {searchInput && (
-            <button onClick={() => { handleSearch(''); setGlobalFilter('') }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)]">
-              <X className="w-3 h-3" />
+        {/* Row 1: search + actions */}
+        <div className="flex items-center gap-2 px-3 py-2">
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-0 max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-4)]" />
+            <input
+              value={searchInput}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search…"
+              className="w-full h-8 sm:h-7 pl-8 pr-3 text-xs rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] focus:outline-none focus:border-sky-500 transition-colors"
+            />
+            {searchInput && (
+              <button onClick={() => { handleSearch(''); setGlobalFilter('') }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)]">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Active filter chips — desktop only */}
+          <div className="hidden sm:flex items-center gap-1 flex-1 flex-wrap">
+            <AnimatePresence>
+              {activeFilters.map((f) => (
+                <FilterChip key={f.id} label={f.label} onRemove={() => setFilter(f.id, undefined)} />
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {/* Selection info */}
+          {selectedCount > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-semibold whitespace-nowrap">
+              {selectedCount} sel.
+            </span>
+          )}
+
+          <span className="text-[10px] text-[var(--text-4)] whitespace-nowrap hidden sm:inline">
+            {totalFiltered.toLocaleString()} rows
+          </span>
+
+          {/* Filter toggle */}
+          {filterDefs.length > 0 && (
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={cn('flex items-center gap-1 sm:gap-1.5 h-8 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[10px] font-medium transition-colors',
+                showFilters || activeFilters.length > 0
+                  ? 'bg-indigo-500/15 text-indigo-400'
+                  : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilters.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {activeFilters.length}
+                </span>
+              )}
             </button>
           )}
+
+          {/* Column config */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowColConfig((v) => !v); setShowViews(false) }}
+              className={cn('flex items-center gap-1.5 h-8 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[10px] font-medium transition-colors',
+                showColConfig ? 'bg-[var(--surface)] text-[var(--text-1)]' : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
+            >
+              <Columns3 className="w-3 h-3" />
+            </button>
+            <AnimatePresence>
+              {showColConfig && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowColConfig(false)} />
+                  <div className="relative z-50">
+                    <ColumnConfigPanel table={table} onClose={() => setShowColConfig(false)} />
+                  </div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Saved views */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowViews((v) => !v); setShowColConfig(false) }}
+              className={cn('flex items-center gap-1.5 h-8 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[10px] font-medium transition-colors',
+                showViews ? 'bg-[var(--surface)] text-[var(--text-1)]' : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
+            >
+              <BookmarkPlus className="w-3 h-3" />
+              {activeViewName && <span className="text-sky-400 hidden sm:inline">{activeViewName}</span>}
+            </button>
+            <AnimatePresence>
+              {showViews && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowViews(false)} />
+                  <div className="relative z-50">
+                    <SavedViewsPanel
+                      views={views}
+                      onApply={applyView}
+                      onSave={handleSaveView}
+                      onDelete={removeView}
+                      onClose={() => setShowViews(false)}
+                      currentName={activeViewName}
+                    />
+                  </div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* CSV export */}
+          <button
+            onClick={() => exportTableCSV(table, tableId)}
+            className="flex items-center gap-1.5 h-8 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[10px] font-medium text-[var(--text-3)] hover:bg-[var(--surface)] hover:text-emerald-400 transition-colors"
+            title="Export filtered rows to CSV"
+          >
+            <Download className="w-3 h-3" />
+          </button>
         </div>
 
-        {/* Active filter chips */}
-        <div className="flex items-center gap-1 flex-1 flex-wrap">
-          <AnimatePresence>
-            {activeFilters.map((f) => (
-              <FilterChip key={f.id} label={f.label} onRemove={() => setFilter(f.id, undefined)} />
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {/* Selection info */}
-        {selectedCount > 0 && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-semibold whitespace-nowrap">
-            {selectedCount} selected
-          </span>
+        {/* Row 2: active filter chips on mobile */}
+        {activeFilters.length > 0 && (
+          <div className="flex items-center gap-1 px-3 pb-2 flex-wrap sm:hidden">
+            <AnimatePresence>
+              {activeFilters.map((f) => (
+                <FilterChip key={f.id} label={f.label} onRemove={() => setFilter(f.id, undefined)} />
+              ))}
+            </AnimatePresence>
+          </div>
         )}
-
-        <span className="text-[10px] text-[var(--text-4)] whitespace-nowrap">
-          {totalFiltered.toLocaleString()} rows
-        </span>
-
-        {/* Filter toggle */}
-        {filterDefs.length > 0 && (
-          <button
-            onClick={() => setShowFilters((v) => !v)}
-            className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-medium transition-colors',
-              showFilters || activeFilters.length > 0
-                ? 'bg-indigo-500/15 text-indigo-400'
-                : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
-          >
-            <SlidersHorizontal className="w-3 h-3" />
-            Filters
-            {activeFilters.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {activeFilters.length}
-              </span>
-            )}
-          </button>
-        )}
-
-        {/* Column config */}
-        <div className="relative">
-          <button
-            onClick={() => { setShowColConfig((v) => !v); setShowViews(false) }}
-            className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-medium transition-colors',
-              showColConfig ? 'bg-[var(--surface)] text-[var(--text-1)]' : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
-          >
-            <Columns3 className="w-3 h-3" />
-          </button>
-          <AnimatePresence>
-            {showColConfig && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowColConfig(false)} />
-                <div className="relative z-50">
-                  <ColumnConfigPanel table={table} onClose={() => setShowColConfig(false)} />
-                </div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Saved views */}
-        <div className="relative">
-          <button
-            onClick={() => { setShowViews((v) => !v); setShowColConfig(false) }}
-            className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-medium transition-colors',
-              showViews ? 'bg-[var(--surface)] text-[var(--text-1)]' : 'text-[var(--text-3)] hover:bg-[var(--surface)]')}
-          >
-            <BookmarkPlus className="w-3 h-3" />
-            {activeViewName && <span className="text-sky-400">{activeViewName}</span>}
-          </button>
-          <AnimatePresence>
-            {showViews && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowViews(false)} />
-                <div className="relative z-50">
-                  <SavedViewsPanel
-                    views={views}
-                    onApply={applyView}
-                    onSave={handleSaveView}
-                    onDelete={removeView}
-                    onClose={() => setShowViews(false)}
-                    currentName={activeViewName}
-                  />
-                </div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* CSV export */}
-        <button
-          onClick={() => exportTableCSV(table, tableId)}
-          className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-medium text-[var(--text-3)] hover:bg-[var(--surface)] hover:text-emerald-400 transition-colors"
-          title="Export filtered rows to CSV"
-        >
-          <Download className="w-3 h-3" />
-        </button>
       </div>
 
       {/* ── Filter panel ─────────────────────────────────────────────────── */}
@@ -840,7 +861,7 @@ export function DataTable<TData>({
       {/* ── Table ────────────────────────────────────────────────────────── */}
       <div
         ref={containerRef}
-        style={{ height: `${height}px`, overflow: 'auto', position: 'relative' }}
+        style={{ height: `${height}px`, overflow: 'auto', position: 'relative', touchAction: 'pan-y pan-x', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         className="flex-shrink-0"
       >
         {loading && (

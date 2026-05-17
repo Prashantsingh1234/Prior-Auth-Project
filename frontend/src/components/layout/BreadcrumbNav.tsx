@@ -45,7 +45,8 @@ export function BreadcrumbNav() {
 
   return (
     <nav
-      className="flex items-center gap-1 px-6 h-8 border-b border-[var(--border)] flex-shrink-0"
+      className="flex items-center gap-1 px-4 sm:px-6 h-8 border-b border-[var(--border)] flex-shrink-0 overflow-x-auto"
+      style={{ scrollbarWidth: 'none' }}
       aria-label="Breadcrumb"
     >
       <Link to="/" className="text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors flex-shrink-0">

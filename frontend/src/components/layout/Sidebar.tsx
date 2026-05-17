@@ -1,15 +1,16 @@
 import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
+  LayoutDashboard, FileText, BarChart3, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot, Table2,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot, Table2, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 import { usePermissions } from '@/hooks'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import type { Permission, UserRole } from '@/types'
 
 // ─── Nav item definitions ─────────────────────────────────────────────────────
@@ -24,119 +25,50 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  {
-    to: '/dashboard',
-    icon: LayoutDashboard,
-    label: 'Dashboard',
-  },
-  {
-    to: '/cases',
-    icon: ClipboardList,
-    label: 'Case Queue',
-    permission: 'cases:read',
-  },
-  {
-    to: '/analytics',
-    icon: BarChart3,
-    label: 'AI Analytics',
-    permission: 'analytics:read',
-  },
-  {
-    to: '/policies',
-    icon: BookOpen,
-    label: 'Policies',
-    permission: 'policies:read',
-  },
-  {
-    to: '/ingestion',
-    icon: Upload,
-    label: 'Doc Intelligence',
-    permission: 'cases:read',
-  },
-  {
-    to: '/reasoning',
-    icon: Brain,
-    label: 'AI Reasoning',
-    permission: 'cases:read',
-  },
-  {
-    to: '/clarifications',
-    icon: MessageCircle,
-    label: 'Clarifications',
-    permission: 'cases:read',
-    badge: '2',
-  },
-  {
-    to: '/workflow',
-    icon: Radio,
-    label: 'Mission Control',
-    permission: 'cases:read',
-  },
-  {
-    to: '/monitoring',
-    icon: MonitorDot,
-    label: 'AI Monitoring',
-    permission: 'analytics:read',
-  },
-  {
-    to: '/realtime',
-    icon: Activity,
-    label: 'Live Updates',
-    permission: 'cases:read',
-  },
-  {
-    to: '/tables',
-    icon: Table2,
-    label: 'Data Tables',
-    permission: 'cases:read',
-  },
-  {
-    to: '/audit',
-    icon: FileText,
-    label: 'Audit Log',
-    permission: 'audit:read',
-  },
+  { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/cases',       icon: ClipboardList,   label: 'Case Queue',     permission: 'cases:read' },
+  { to: '/analytics',   icon: BarChart3,        label: 'AI Analytics',   permission: 'analytics:read' },
+  { to: '/policies',    icon: BookOpen,         label: 'Policies',       permission: 'policies:read' },
+  { to: '/ingestion',   icon: Upload,           label: 'Doc Intelligence', permission: 'cases:read' },
+  { to: '/reasoning',   icon: Brain,            label: 'AI Reasoning',   permission: 'cases:read' },
+  { to: '/clarifications', icon: MessageCircle, label: 'Clarifications', permission: 'cases:read', badge: '2' },
+  { to: '/workflow',    icon: Radio,            label: 'Mission Control', permission: 'cases:read' },
+  { to: '/monitoring',  icon: MonitorDot,       label: 'AI Monitoring',  permission: 'analytics:read' },
+  { to: '/realtime',    icon: Activity,         label: 'Live Updates',   permission: 'cases:read' },
+  { to: '/tables',      icon: Table2,           label: 'Data Tables',    permission: 'cases:read' },
+  { to: '/audit',       icon: FileText,         label: 'Audit Log',      permission: 'audit:read' },
 ]
 
 const ADMIN_NAV: NavItem[] = [
-  {
-    to: '/admin/users',
-    icon: Users,
-    label: 'User Management',
-    permission: 'admin:users',
-  },
-  {
-    to: '/settings',
-    icon: Settings,
-    label: 'Settings',
-    permission: 'admin:settings',
-  },
+  { to: '/admin/users', icon: Users,    label: 'User Management', permission: 'admin:users' },
+  { to: '/settings',    icon: Settings, label: 'Settings',        permission: 'admin:settings' },
 ]
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Nav button ───────────────────────────────────────────────────────────────
 
 interface NavButtonProps {
   item:      NavItem
   collapsed: boolean
   visible:   boolean
+  onClose?:  () => void
 }
 
-function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible }: NavButtonProps) {
+function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible, onClose }: NavButtonProps) {
   if (!visible) return null
   return (
-    <NavLink key={to} to={to} end={to === '/dashboard'}>
+    <NavLink to={to} end={to === '/dashboard'} onClick={onClose}>
       {({ isActive }) => (
         <motion.div
           whileHover={{ x: collapsed ? 0 : 2 }}
           whileTap={{ scale: 0.97 }}
           className={cn(
             'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative cursor-pointer',
+            'min-h-[44px] md:min-h-0',
             isActive
               ? 'text-cyan-400 font-medium'
               : 'text-[var(--text-2)] hover:bg-[var(--elevated)] hover:text-[var(--text-1)]',
           )}
         >
-          {/* Active indicator */}
           {isActive && (
             <motion.div
               layoutId="nav-indicator"
@@ -144,8 +76,6 @@ function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible 
               style={{ boxShadow: '0 0 8px rgba(14,165,233,0.6)' }}
             />
           )}
-
-          {/* Active background */}
           {isActive && (
             <motion.div
               layoutId="nav-bg"
@@ -184,11 +114,14 @@ function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible 
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { user } = useAuthStore()
-  const { can } = usePermissions()
-  const logout = useLogout()
+  const mobileSidebarOpen    = useUIStore((s) => s.mobileSidebarOpen)
+  const setMobileSidebarOpen = useUIStore((s) => s.setMobileSidebarOpen)
+  const { user }  = useAuthStore()
+  const { can }   = usePermissions()
+  const logout    = useLogout()
+  const isDesktop = useBreakpoint('md')
 
-  const collapsed = sidebarCollapsed
+  const collapsed = isDesktop ? sidebarCollapsed : false
 
   function isVisible(item: NavItem): boolean {
     if (item.permission && !can(item.permission)) return false
@@ -198,17 +131,27 @@ export function Sidebar() {
 
   const visibleAdmin = ADMIN_NAV.filter(isVisible)
 
+  // On mobile: close drawer after nav
+  const handleNavClose = () => {
+    if (!isDesktop) setMobileSidebarOpen(false)
+  }
+
+  // Animation: desktop = width, mobile = x translate
+  const animateProps = isDesktop
+    ? { width: collapsed ? 64 : 256, x: 0 }
+    : { width: 256, x: mobileSidebarOpen ? 0 : -256 }
+
   return (
     <motion.aside
-      animate={{ width: collapsed ? 64 : 256 }}
+      animate={animateProps}
       transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
       className="fixed left-0 top-0 h-full z-30 flex flex-col overflow-hidden"
       style={{
-        background: 'var(--surface)',
+        background:  'var(--surface)',
         borderRight: '1px solid var(--border)',
       }}
     >
-      {/* Logo */}
+      {/* Logo + mobile close */}
       <div className="flex items-center h-16 px-4 border-b border-[var(--border)] gap-3 flex-shrink-0">
         <motion.div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -222,6 +165,7 @@ export function Sidebar() {
         >
           <Stethoscope className="w-4 h-4 text-cyan-400" />
         </motion.div>
+
         <AnimatePresence>
           {!collapsed && (
             <motion.div
@@ -229,13 +173,24 @@ export function Sidebar() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.12 }}
-              className="overflow-hidden"
+              className="overflow-hidden flex-1"
             >
               <p className="text-sm font-bold text-[var(--text-1)] whitespace-nowrap leading-none">PA Review</p>
               <p className="text-[10px] text-[var(--text-4)] whitespace-nowrap mt-0.5">AI Platform</p>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Mobile close button */}
+        {!isDesktop && (
+          <button
+            onClick={() => setMobileSidebarOpen(false)}
+            className="ml-auto p-2 rounded-lg text-[var(--text-4)] hover:bg-[var(--elevated)] hover:text-[var(--text-1)] transition-colors"
+            aria-label="Close menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* System status */}
@@ -257,10 +212,15 @@ export function Sidebar() {
       {/* Primary navigation */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
         {PRIMARY_NAV.map((item) => (
-          <NavButton key={item.to} item={item} collapsed={collapsed} visible={isVisible(item)} />
+          <NavButton
+            key={item.to}
+            item={item}
+            collapsed={collapsed}
+            visible={isVisible(item)}
+            onClose={handleNavClose}
+          />
         ))}
 
-        {/* Admin section */}
         {visibleAdmin.length > 0 && (
           <>
             <AnimatePresence>
@@ -279,7 +239,13 @@ export function Sidebar() {
             </AnimatePresence>
             {collapsed && <div className="my-2 mx-3 border-t border-[var(--border)]" />}
             {visibleAdmin.map((item) => (
-              <NavButton key={item.to} item={item} collapsed={collapsed} visible={true} />
+              <NavButton
+                key={item.to}
+                item={item}
+                collapsed={collapsed}
+                visible={true}
+                onClose={handleNavClose}
+              />
             ))}
           </>
         )}
@@ -307,8 +273,10 @@ export function Sidebar() {
       {/* User card */}
       <div className={cn('px-2 mx-1 py-2 rounded-lg', !collapsed && 'bg-[var(--elevated)] mb-1 mx-2')}>
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-               style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.8), rgba(139,92,246,0.8))' }}>
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.8), rgba(139,92,246,0.8))' }}
+          >
             {user?.name?.[0]?.toUpperCase() ?? 'U'}
           </div>
           <AnimatePresence>
@@ -343,22 +311,25 @@ export function Sidebar() {
           </AnimatePresence>
         </button>
 
-        <button
-          onClick={toggleSidebar}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--text-3)] hover:bg-[var(--elevated)] hover:text-[var(--text-2)] transition-colors"
-        >
-          {collapsed
-            ? <ChevronRight className="w-4 h-4 flex-shrink-0" />
-            : <ChevronLeft className="w-4 h-4 flex-shrink-0" />
-          }
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap text-sm">
-                Collapse
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
+        {/* Collapse toggle — desktop only */}
+        {isDesktop && (
+          <button
+            onClick={toggleSidebar}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--text-3)] hover:bg-[var(--elevated)] hover:text-[var(--text-2)] transition-colors"
+          >
+            {collapsed
+              ? <ChevronRight className="w-4 h-4 flex-shrink-0" />
+              : <ChevronLeft  className="w-4 h-4 flex-shrink-0" />
+            }
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap text-sm">
+                  Collapse
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        )}
       </div>
     </motion.aside>
   )

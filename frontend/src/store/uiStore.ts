@@ -31,7 +31,8 @@ interface UIState {
   theme: 'light' | 'dark' | 'system'
 
   // Sidebar
-  sidebarCollapsed: boolean
+  sidebarCollapsed:  boolean
+  mobileSidebarOpen: boolean
 
   // Panels
   notificationsPanelOpen: boolean
@@ -56,8 +57,10 @@ interface UIState {
   applyTheme:  () => void
 
   // Sidebar
-  toggleSidebar:      () => void
+  toggleSidebar:       () => void
   setSidebarCollapsed: (v: boolean) => void
+  toggleMobileSidebar:    () => void
+  setMobileSidebarOpen:   (v: boolean) => void
 
   // Panels
   setNotificationsPanelOpen: (v: boolean) => void
@@ -95,6 +98,7 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       theme:                  'light',
       sidebarCollapsed:       false,
+      mobileSidebarOpen:      false,
       notificationsPanelOpen: false,
       aiPanelOpen:            false,
       commandOpen:            false,
@@ -112,8 +116,10 @@ export const useUIStore = create<UIState>()(
       applyTheme: () => applyTheme(get().theme),
 
       // ── Sidebar ───────────────────────────────────────────────────────────
-      toggleSidebar:       () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+      toggleSidebar:          () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarCollapsed:    (v) => set({ sidebarCollapsed: v }),
+      toggleMobileSidebar:    () => set((s) => ({ mobileSidebarOpen: !s.mobileSidebarOpen })),
+      setMobileSidebarOpen:   (v) => set({ mobileSidebarOpen: v }),
 
       // ── Panels ────────────────────────────────────────────────────────────
       setNotificationsPanelOpen: (v) => set({ notificationsPanelOpen: v }),
@@ -163,7 +169,7 @@ export const useUIStore = create<UIState>()(
       removeTab: (id) => set((s) => {
         const remaining = s.workspaceTabs.filter((t) => t.id !== id)
         const newActive = s.activeTabId === id
-          ? (remaining.at(-1)?.id ?? null)
+          ? (remaining[remaining.length - 1]?.id ?? null)
           : s.activeTabId
         return { workspaceTabs: remaining, activeTabId: newActive }
       }),

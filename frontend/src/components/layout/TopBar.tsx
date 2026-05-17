@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell, Sun, Moon, Monitor, Search, Brain,
-  ChevronDown, LogOut, Settings, User, Keyboard,
+  ChevronDown, LogOut, Settings, User, Keyboard, Menu, X,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/features/auth/hooks/useLogout'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/config/routes.config'
 
@@ -18,14 +19,18 @@ export function TopBar() {
     commandOpen, setCommandOpen,
     notificationsPanelOpen, setNotificationsPanelOpen,
     aiPanelOpen, setAIPanelOpen,
+    toggleMobileSidebar,
   } = useUIStore()
 
   const user    = useAuthStore((s) => s.user)
   const logout  = useLogout()
   const navigate = useNavigate()
+  const isMd    = useBreakpoint('md')
 
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const userMenuRef = useRef<HTMLDivElement>(null)
+  const [userMenuOpen,   setUserMenuOpen]   = useState(false)
+  const [searchExpanded, setSearchExpanded] = useState(false)
+  const userMenuRef   = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Close user menu on outside click
   useEffect(() => {
@@ -38,6 +43,13 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Focus search input when expanded on mobile
+  useEffect(() => {
+    if (searchExpanded && !isMd) {
+      setTimeout(() => searchInputRef.current?.focus(), 50)
+    }
+  }, [searchExpanded, isMd])
+
   const themeOptions: { value: 'light' | 'dark' | 'system'; icon: React.ElementType; label: string }[] = [
     { value: 'light',  icon: Sun,     label: 'Light'  },
     { value: 'dark',   icon: Moon,    label: 'Dark'   },
@@ -46,25 +58,74 @@ export function TopBar() {
 
   return (
     <header
-      className="h-14 flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-20"
+      className="h-14 flex items-center px-3 sm:px-4 gap-2 sm:gap-3 flex-shrink-0 sticky top-0 z-20"
       style={{
         background:   'var(--surface)',
         borderBottom: '1px solid var(--border)',
         backdropFilter: 'blur(12px)',
       }}
     >
-      {/* Command palette trigger / global search */}
+      {/* Mobile hamburger */}
       <button
-        onClick={() => setCommandOpen(!commandOpen)}
-        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-[var(--text-3)] hover:text-[var(--text-2)] hover:bg-[var(--elevated)] border border-[var(--border)] transition-all flex-1 max-w-xs group"
+        onClick={toggleMobileSidebar}
+        className="p-2 rounded-xl text-[var(--text-2)] hover:bg-[var(--elevated)] transition-colors md:hidden flex-shrink-0"
+        aria-label="Open menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Mobile expanded search overlay */}
+      <AnimatePresence>
+        {searchExpanded && !isMd && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-10 flex items-center px-3 gap-2"
+            style={{ background: 'var(--surface)' }}
+          >
+            <Search className="w-4 h-4 text-[var(--text-4)] flex-shrink-0" />
+            <input
+              ref={searchInputRef}
+              placeholder="Search or jump to…"
+              className="flex-1 bg-transparent text-sm text-[var(--text-1)] placeholder-[var(--text-4)] focus:outline-none"
+              onKeyDown={(e) => { if (e.key === 'Escape') setSearchExpanded(false) }}
+            />
+            <button
+              onClick={() => setSearchExpanded(false)}
+              className="p-1.5 rounded-lg text-[var(--text-4)] hover:text-[var(--text-2)]"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop search / command palette trigger */}
+      <button
+        onClick={() => isMd ? setCommandOpen(!commandOpen) : setSearchExpanded(true)}
+        className={cn(
+          'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-[var(--text-3)]',
+          'hover:text-[var(--text-2)] hover:bg-[var(--elevated)] border border-[var(--border)] transition-all group',
+          'hidden sm:flex flex-1 max-w-xs',
+        )}
       >
         <Search className="w-3.5 h-3.5 text-[var(--text-4)]" />
         <span className="flex-1 text-left">Search or jump to…</span>
         <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-          <kbd className="text-[10px] font-mono bg-[var(--elevated)] border border-[var(--border)] px-1.5 py-0.5 rounded">
+          <kbd className="text-[10px] font-mono bg-[var(--elevated)] border border-[var(--border)] px-1.5 py-0.5 rounded hidden lg:inline">
             ⌘K
           </kbd>
         </div>
+      </button>
+
+      {/* Mobile search icon (visible when not expanded) */}
+      <button
+        onClick={() => setSearchExpanded(true)}
+        className="p-2 rounded-xl text-[var(--text-2)] hover:bg-[var(--elevated)] transition-colors sm:hidden"
+        aria-label="Search"
+      >
+        <Search className="w-4 h-4" />
       </button>
 
       <div className="flex-1" />
@@ -75,7 +136,7 @@ export function TopBar() {
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.97 }}
         className={cn(
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border',
+          'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium transition-all border',
           aiPanelOpen
             ? 'bg-violet-500/15 text-violet-400 border-violet-500/25'
             : 'text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--elevated)] hover:text-[var(--text-1)]',
@@ -92,8 +153,8 @@ export function TopBar() {
         <span className="hidden sm:inline">AI Assistant</span>
       </motion.button>
 
-      {/* Theme toggle */}
-      <div className="flex items-center gap-0.5 bg-[var(--elevated)] rounded-lg p-1 border border-[var(--border)]">
+      {/* Theme toggle — hidden on small mobile */}
+      <div className="hidden sm:flex items-center gap-0.5 bg-[var(--elevated)] rounded-lg p-1 border border-[var(--border)]">
         {themeOptions.map(({ value, icon: Icon, label }) => (
           <button
             key={value}
@@ -137,7 +198,7 @@ export function TopBar() {
         </AnimatePresence>
       </button>
 
-      {/* Keyboard shortcut hint */}
+      {/* Keyboard shortcut hint — desktop only */}
       <button
         onClick={() => setCommandOpen(true)}
         className="p-2 rounded-xl text-[var(--text-4)] hover:text-[var(--text-2)] hover:bg-[var(--elevated)] transition-all hidden lg:flex"
@@ -175,7 +236,6 @@ export function TopBar() {
               className="absolute right-0 top-full mt-2 w-48 rounded-xl overflow-hidden shadow-card-lg z-50"
               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
-              {/* User info */}
               <div className="px-4 py-3 border-b border-[var(--border)]">
                 <p className="text-sm font-semibold text-[var(--text-1)]">{user?.name}</p>
                 <p className="text-xs text-[var(--text-3)] mt-0.5">{user?.email}</p>
@@ -187,7 +247,6 @@ export function TopBar() {
                 </span>
               </div>
 
-              {/* Menu items */}
               {[
                 { icon: User,     label: 'Profile',  onClick: () => { navigate(ROUTES.SETTINGS); setUserMenuOpen(false) } },
                 { icon: Settings, label: 'Settings', onClick: () => { navigate(ROUTES.SETTINGS); setUserMenuOpen(false) } },

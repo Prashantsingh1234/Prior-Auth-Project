@@ -58,8 +58,8 @@ export function WorkspaceTabs() {
 
   return (
     <div
-      className="flex items-center border-b border-[var(--border)] flex-shrink-0 h-9"
-      style={{ background: 'var(--surface)' }}
+      className="flex items-center border-b border-[var(--border)] flex-shrink-0 h-9 overflow-x-auto"
+      style={{ background: 'var(--surface)', scrollbarWidth: 'none' }}
     >
       {/* Scroll left */}
       {workspaceTabs.length > 4 && (
