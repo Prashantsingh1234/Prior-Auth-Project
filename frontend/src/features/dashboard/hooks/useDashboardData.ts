@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery }            from '@tanstack/react-query'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,16 +173,12 @@ function randomEvent(): ActivityEvent {
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useKPIMetrics() {
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 30_000)
-    return () => clearInterval(t)
-  }, [])
   return useQuery({
-    queryKey: ['dashboard', 'kpi', tick],
-    queryFn:  () => Promise.resolve(buildKPI(tick)),
-    staleTime: 25_000,
-    placeholderData: buildKPI(0),
+    queryKey:        ['dashboard', 'kpi'],
+    queryFn:         () => Promise.resolve(buildKPI(Math.floor(Date.now() / 30_000))),
+    staleTime:       25_000,
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev ?? buildKPI(0),
   })
 }
 
@@ -205,16 +201,12 @@ export function useReviewerLoad() {
 }
 
 export function useSystemStats() {
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 15_000)
-    return () => clearInterval(t)
-  }, [])
   return useQuery({
-    queryKey:  ['dashboard', 'system', tick],
-    queryFn:   () => Promise.resolve(buildSystemStats(tick)),
-    staleTime: 12_000,
-    placeholderData: buildSystemStats(0),
+    queryKey:        ['dashboard', 'system'],
+    queryFn:         () => Promise.resolve(buildSystemStats(Math.floor(Date.now() / 15_000))),
+    staleTime:       12_000,
+    refetchInterval: 15_000,
+    placeholderData: (prev) => prev ?? buildSystemStats(0),
   })
 }
 

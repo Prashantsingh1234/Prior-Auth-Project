@@ -105,6 +105,11 @@ class RealtimeService {
   private stateListeners: Set<(s: WSConnectionState) => void> = new Set()
   private manualClose   = false
 
+  // RAF batch state: token stream + deduped OCR progress
+  private tokenBatch:   RTEvent<AIThinkingPayload>[] = []
+  private pendingOCR:   Map<string, RTEvent<OCRProgressPayload>> = new Map()
+  private rafHandle:    number | null = null
+
   connect() {
     if (this.state === 'connected' || this.state === 'connecting') return
     this.manualClose = false
@@ -160,7 +165,7 @@ class RealtimeService {
       try {
         const msg = JSON.parse(event.data as string) as RTEvent
         if (msg.type === 'connection:ping') return
-        this._dispatch(msg)
+        this._enqueue(msg)
       } catch {
         // malformed frame — ignore
       }
@@ -177,6 +182,32 @@ class RealtimeService {
         this._scheduleReconnect()
       }
     }
+  }
+
+  // High-frequency events are batched into one RAF frame so React 18 automatic
+  // batching collapses all the setState calls into a single re-render.
+  private _enqueue(event: RTEvent) {
+    if (event.type === 'ai:thinking_token') {
+      this.tokenBatch.push(event as RTEvent<AIThinkingPayload>)
+      this._scheduleFlush()
+    } else if (event.type === 'ocr:progress') {
+      const doc = (event.payload as OCRProgressPayload).documentId
+      this.pendingOCR.set(doc, event as RTEvent<OCRProgressPayload>)
+      this._scheduleFlush()
+    } else {
+      this._dispatch(event)
+    }
+  }
+
+  private _scheduleFlush() {
+    if (this.rafHandle !== null) return
+    this.rafHandle = requestAnimationFrame(() => {
+      this.rafHandle = null
+      this.pendingOCR.forEach((ev) => this._dispatch(ev))
+      this.pendingOCR.clear()
+      this.tokenBatch.forEach((ev) => this._dispatch(ev))
+      this.tokenBatch = []
+    })
   }
 
   private _dispatch(event: RTEvent) {
@@ -205,6 +236,9 @@ class RealtimeService {
 
   private _cleanup() {
     this._stopPing()
+    if (this.rafHandle !== null) { cancelAnimationFrame(this.rafHandle); this.rafHandle = null }
+    this.tokenBatch = []
+    this.pendingOCR.clear()
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
     if (this.ws) {
       this.ws.onopen = this.ws.onmessage = this.ws.onerror = this.ws.onclose = null

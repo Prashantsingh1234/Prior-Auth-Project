@@ -18,16 +18,28 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query', 'zustand'],
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,
+    target: 'esnext',
+    minify: 'esbuild',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
-          pdf: ['react-pdf', 'pdfjs-dist'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-tabs', '@radix-ui/react-select'],
+        manualChunks(id) {
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) return 'charts'
+          if (id.includes('node_modules/framer-motion'))                                return 'motion'
+          if (id.includes('node_modules/lucide-react'))                                 return 'icons'
+          if (id.includes('node_modules/@tanstack/react-table') ||
+              id.includes('node_modules/@tanstack/react-virtual'))                      return 'tanstack-table'
+          if (id.includes('node_modules/@tanstack/react-query'))                        return 'query'
+          if (id.includes('node_modules/react-pdf') || id.includes('node_modules/pdfjs-dist')) return 'pdf'
+          if (id.includes('node_modules/@radix-ui'))                                    return 'radix'
+          if (id.includes('node_modules/zustand'))                                      return 'zustand'
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react-router-dom'))                             return 'vendor'
         },
       },
     },

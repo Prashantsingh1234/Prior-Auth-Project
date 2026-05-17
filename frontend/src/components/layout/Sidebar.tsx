@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -47,16 +48,24 @@ const ADMIN_NAV: NavItem[] = [
 // ─── Nav button ───────────────────────────────────────────────────────────────
 
 interface NavButtonProps {
-  item:      NavItem
-  collapsed: boolean
-  visible:   boolean
-  onClose?:  () => void
+  item:       NavItem
+  collapsed:  boolean
+  visible:    boolean
+  onClose?:   () => void
+  onPrefetch?: (route: string) => void
 }
 
-function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible, onClose }: NavButtonProps) {
+const NavButton = memo(function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible, onClose, onPrefetch }: NavButtonProps) {
   if (!visible) return null
   return (
-    <NavLink to={to} end={to === '/dashboard'} onClick={onClose} aria-label={collapsed ? label : undefined}>
+    <NavLink
+      to={to}
+      end={to === '/dashboard'}
+      onClick={onClose}
+      onMouseEnter={() => onPrefetch?.(to)}
+      onFocus={() => onPrefetch?.(to)}
+      aria-label={collapsed ? label : undefined}
+    >
       {({ isActive }) => (
         <motion.div
           whileHover={{ x: collapsed ? 0 : 2 }}
@@ -109,7 +118,7 @@ function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible,
       )}
     </NavLink>
   )
-}
+})
 
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 
@@ -124,18 +133,32 @@ export function Sidebar() {
 
   const collapsed = isDesktop ? sidebarCollapsed : false
 
-  function isVisible(item: NavItem): boolean {
+  const isVisible = useCallback((item: NavItem): boolean => {
     if (item.permission && !can(item.permission)) return false
     if (item.roles && !item.roles.includes(user?.role as UserRole)) return false
     return true
-  }
+  }, [can, user?.role])
 
   const visibleAdmin = ADMIN_NAV.filter(isVisible)
 
-  // On mobile: close drawer after nav
-  const handleNavClose = () => {
+  const handleNavClose = useCallback(() => {
     if (!isDesktop) setMobileSidebarOpen(false)
-  }
+  }, [isDesktop, setMobileSidebarOpen])
+
+  const handlePrefetch = useCallback((route: string) => {
+    const chunkMap: Record<string, () => Promise<unknown>> = {
+      '/dashboard':      () => import('@/features/dashboard/DashboardPage'),
+      '/cases':          () => import('@/features/cases/pages/CaseListPage'),
+      '/analytics':      () => import('@/features/analytics/pages/AnalyticsDashboard'),
+      '/audit':          () => import('@/features/audit/AuditLogPage'),
+      '/policies':       () => import('@/features/policies/PoliciesPage'),
+      '/monitoring':     () => import('@/features/monitoring/MonitoringPage'),
+      '/ingestion':      () => import('@/features/ingestion/DocumentIntelligencePage'),
+      '/reasoning':      () => import('@/features/reasoning/ReasoningPage'),
+      '/clarifications': () => import('@/features/clarifications/ClarificationPage'),
+    }
+    chunkMap[route]?.().catch(() => {})
+  }, [])
 
   // Animation: desktop = width, mobile = x translate
   const animateProps = isDesktop
@@ -219,6 +242,7 @@ export function Sidebar() {
             collapsed={collapsed}
             visible={isVisible(item)}
             onClose={handleNavClose}
+            onPrefetch={handlePrefetch}
           />
         ))}
 
@@ -246,6 +270,7 @@ export function Sidebar() {
                 collapsed={collapsed}
                 visible={true}
                 onClose={handleNavClose}
+                onPrefetch={handlePrefetch}
               />
             ))}
           </>

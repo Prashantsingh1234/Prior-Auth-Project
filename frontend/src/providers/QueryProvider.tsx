@@ -6,12 +6,15 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime:            APP_CONFIG.cache.caseListStaleMs,
-      gcTime:               5 * 60_000,
+      gcTime:               10 * 60_000,
+      networkMode:          'offlineFirst',
       refetchOnWindowFocus: false,
+      refetchOnReconnect:   true,
       retry: (failureCount, error: any) => {
         if (error?.statusCode >= 400 && error?.statusCode < 500) return false
         return failureCount < APP_CONFIG.api.retries
       },
+      retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 30_000),
     },
     mutations: { retry: 0 },
   },
