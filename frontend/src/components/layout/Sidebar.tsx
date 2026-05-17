@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
@@ -65,6 +65,12 @@ const PRIMARY_NAV: NavItem[] = [
     label: 'Clarifications',
     permission: 'cases:read',
     badge: '2',
+  },
+  {
+    to: '/workflow',
+    icon: Radio,
+    label: 'Mission Control',
+    permission: 'cases:read',
   },
   {
     to: '/audit',

@@ -21,6 +21,7 @@ const CaseReviewPage             = lazy(() => import('@/features/review/CaseRevi
 const DocumentIntelligencePage   = lazy(() => import('@/features/ingestion/DocumentIntelligencePage').then((m) => ({ default: m.DocumentIntelligencePage })))
 const ReasoningPage              = lazy(() => import('@/features/reasoning/ReasoningPage').then((m) => ({ default: m.ReasoningPage })))
 const ClarificationPage          = lazy(() => import('@/features/clarifications/ClarificationPage').then((m) => ({ default: m.ClarificationPage })))
+const ReviewerWorkflowPage       = lazy(() => import('@/features/workflow/ReviewerWorkflowPage').then((m) => ({ default: m.ReviewerWorkflowPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -142,6 +143,12 @@ export function AppRouter() {
             <Route
               path={ROUTES.CLARIFICATIONS}
               element={<Page><ClarificationPage /></Page>}
+            />
+
+            {/* Reviewer workflow — mission control */}
+            <Route
+              path={ROUTES.WORKFLOW}
+              element={<Page><ReviewerWorkflowPage /></Page>}
             />
 
             {/* Analytics — reviewer + admin */}

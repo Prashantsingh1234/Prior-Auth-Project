@@ -15,6 +15,7 @@ export const ROUTES = {
   INGESTION:  '/ingestion',
   REASONING:       '/reasoning',
   CLARIFICATIONS:  '/clarifications',
+  WORKFLOW:        '/workflow',
   POLICIES:   '/policies',
   AUDIT:      '/audit',
   MONITORING: '/monitoring',
