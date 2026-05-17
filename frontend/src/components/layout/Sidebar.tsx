@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
@@ -58,6 +58,13 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Brain,
     label: 'AI Reasoning',
     permission: 'cases:read',
+  },
+  {
+    to: '/clarifications',
+    icon: MessageCircle,
+    label: 'Clarifications',
+    permission: 'cases:read',
+    badge: '2',
   },
   {
     to: '/audit',
