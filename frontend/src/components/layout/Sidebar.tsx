@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
@@ -46,6 +46,18 @@ const PRIMARY_NAV: NavItem[] = [
     icon: BookOpen,
     label: 'Policies',
     permission: 'policies:read',
+  },
+  {
+    to: '/ingestion',
+    icon: Upload,
+    label: 'Doc Intelligence',
+    permission: 'cases:read',
+  },
+  {
+    to: '/reasoning',
+    icon: Brain,
+    label: 'AI Reasoning',
+    permission: 'cases:read',
   },
   {
     to: '/audit',

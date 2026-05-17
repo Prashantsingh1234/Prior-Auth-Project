@@ -1,2 +1,11 @@
-﻿export { useRationale }   from './hooks/useRationale'
+export { useRationale }          from './hooks/useRationale'
 export * from './types'
+
+export { ReasoningPage }         from './ReasoningPage'
+export { useReasoningData }      from './hooks/useReasoningData'
+export { ReasoningTimeline }     from './components/ReasoningTimeline'
+export { EvidencePolicyMapper }  from './components/EvidencePolicyMapper'
+export { ConfidenceHeatmap }     from './components/ConfidenceHeatmap'
+export { AIChainPanel }          from './components/AIChainPanel'
+export { RationaleTree }         from './components/RationaleTree'
+export { RAGChunksPanel }        from './components/RAGChunksPanel'

@@ -19,6 +19,7 @@ const DashboardPage       = lazy(() => import('@/features/dashboard/DashboardPag
 const CaseListPage        = lazy(() => import('@/features/cases/pages/CaseListPage').then((m) => ({ default: m.CaseListPage })))
 const CaseReviewPage             = lazy(() => import('@/features/review/CaseReviewPage').then((m) => ({ default: m.CaseReviewPage })))
 const DocumentIntelligencePage   = lazy(() => import('@/features/ingestion/DocumentIntelligencePage').then((m) => ({ default: m.DocumentIntelligencePage })))
+const ReasoningPage              = lazy(() => import('@/features/reasoning/ReasoningPage').then((m) => ({ default: m.ReasoningPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -128,6 +129,12 @@ export function AppRouter() {
             <Route
               path={ROUTES.INGESTION}
               element={<Page><DocumentIntelligencePage /></Page>}
+            />
+
+            {/* AI Reasoning visualization */}
+            <Route
+              path={ROUTES.REASONING}
+              element={<Page><ReasoningPage /></Page>}
             />
 
             {/* Analytics — reviewer + admin */}
