@@ -22,6 +22,7 @@ const DocumentIntelligencePage   = lazy(() => import('@/features/ingestion/Docum
 const ReasoningPage              = lazy(() => import('@/features/reasoning/ReasoningPage').then((m) => ({ default: m.ReasoningPage })))
 const ClarificationPage          = lazy(() => import('@/features/clarifications/ClarificationPage').then((m) => ({ default: m.ClarificationPage })))
 const ReviewerWorkflowPage       = lazy(() => import('@/features/workflow/ReviewerWorkflowPage').then((m) => ({ default: m.ReviewerWorkflowPage })))
+const MonitoringPage             = lazy(() => import('@/features/monitoring/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -149,6 +150,12 @@ export function AppRouter() {
             <Route
               path={ROUTES.WORKFLOW}
               element={<Page><ReviewerWorkflowPage /></Page>}
+            />
+
+            {/* AI Monitoring dashboard */}
+            <Route
+              path={ROUTES.MONITORING}
+              element={<Page><MonitoringPage /></Page>}
             />
 
             {/* Analytics — reviewer + admin */}

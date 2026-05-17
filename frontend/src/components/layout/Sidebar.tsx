@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, Shield, BookOpen,
   ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio,
+  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
@@ -71,6 +71,12 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Radio,
     label: 'Mission Control',
     permission: 'cases:read',
+  },
+  {
+    to: '/monitoring',
+    icon: MonitorDot,
+    label: 'AI Monitoring',
+    permission: 'analytics:read',
   },
   {
     to: '/audit',
