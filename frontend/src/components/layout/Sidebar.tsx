@@ -3,15 +3,18 @@ import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FileText, BarChart3, BookOpen,
-  ChevronLeft, ChevronRight, Activity, Lock, LogOut,
-  Settings, Stethoscope, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot, Table2, X,
+  ChevronLeft, ChevronRight, Activity, LogOut,
+  Settings, Users, ClipboardList, Brain, Upload, MessageCircle, Radio, MonitorDot, Table2, X,
+  Shield,
 } from 'lucide-react'
+import { AIPulse } from '@/components/animations/AIPulse'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 import { usePermissions } from '@/hooks'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useHealth } from '@/hooks/useHealth'
 import type { Permission, UserRole } from '@/types'
 
 // ─── Nav item definitions ─────────────────────────────────────────────────────
@@ -25,19 +28,44 @@ interface NavItem {
   badge?:     string | null
 }
 
-const PRIMARY_NAV: NavItem[] = [
-  { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/cases',       icon: ClipboardList,   label: 'Case Queue',     permission: 'cases:read' },
-  { to: '/analytics',   icon: BarChart3,        label: 'AI Analytics',   permission: 'analytics:read' },
-  { to: '/policies',    icon: BookOpen,         label: 'Policies',       permission: 'policies:read' },
-  { to: '/ingestion',   icon: Upload,           label: 'Doc Intelligence', permission: 'cases:read' },
-  { to: '/reasoning',   icon: Brain,            label: 'AI Reasoning',   permission: 'cases:read' },
-  { to: '/clarifications', icon: MessageCircle, label: 'Clarifications', permission: 'cases:read', badge: '2' },
-  { to: '/workflow',    icon: Radio,            label: 'Mission Control', permission: 'cases:read' },
-  { to: '/monitoring',  icon: MonitorDot,       label: 'AI Monitoring',  permission: 'analytics:read' },
-  { to: '/realtime',    icon: Activity,         label: 'Live Updates',   permission: 'cases:read' },
-  { to: '/tables',      icon: Table2,           label: 'Data Tables',    permission: 'cases:read' },
-  { to: '/audit',       icon: FileText,         label: 'Audit Log',      permission: 'audit:read' },
+interface NavGroup {
+  label:  string
+  items:  NavItem[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'OPERATIONS',
+    items: [
+      { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/cases',          icon: ClipboardList,   label: 'Case Queue',     permission: 'cases:read' },
+      { to: '/workflow',       icon: Radio,           label: 'Mission Control', permission: 'cases:read' },
+      { to: '/clarifications', icon: MessageCircle,   label: 'Clarifications', permission: 'cases:read', badge: '2' },
+    ],
+  },
+  {
+    label: 'INTELLIGENCE',
+    items: [
+      { to: '/analytics',  icon: BarChart3,  label: 'AI Analytics',  permission: 'analytics:read' },
+      { to: '/reasoning',  icon: Brain,      label: 'AI Reasoning',  permission: 'cases:read' },
+      { to: '/monitoring', icon: MonitorDot, label: 'AI Monitoring', permission: 'analytics:read' },
+      { to: '/realtime',   icon: Activity,   label: 'Live Updates',  permission: 'cases:read' },
+    ],
+  },
+  {
+    label: 'DOCUMENTS',
+    items: [
+      { to: '/ingestion', icon: Upload,   label: 'Doc Intelligence', permission: 'cases:read' },
+      { to: '/policies',  icon: BookOpen, label: 'Policies',         permission: 'policies:read' },
+    ],
+  },
+  {
+    label: 'DATA',
+    items: [
+      { to: '/tables', icon: Table2,   label: 'Data Tables', permission: 'cases:read' },
+      { to: '/audit',  icon: FileText, label: 'Audit Log',   permission: 'audit:read' },
+    ],
+  },
 ]
 
 const ADMIN_NAV: NavItem[] = [
@@ -130,6 +158,7 @@ export function Sidebar() {
   const { can }   = usePermissions()
   const logout    = useLogout()
   const isDesktop = useBreakpoint('md')
+  const health    = useHealth()
 
   const collapsed = isDesktop ? sidebarCollapsed : false
 
@@ -165,6 +194,10 @@ export function Sidebar() {
     ? { width: collapsed ? 64 : 256, x: 0 }
     : { width: 256, x: mobileSidebarOpen ? 0 : -256 }
 
+  const healthColor  = health.isUnhealthy ? '#ef4444' : health.isDegraded ? '#f59e0b' : '#10b981'
+  const healthLabel  = health.isUnhealthy ? 'System degraded' : health.isDegraded ? 'Partial outage' : 'All systems operational'
+  const healthRingCls = health.isUnhealthy ? 'status-ring-offline' : health.isDegraded ? 'status-ring-degraded' : 'status-ring-online'
+
   return (
     <motion.aside
       animate={animateProps}
@@ -175,19 +208,41 @@ export function Sidebar() {
         borderRight: '1px solid var(--border)',
       }}
     >
-      {/* Logo + mobile close */}
+      {/* Brand mark + mobile close */}
       <div className="flex items-center h-16 px-4 border-b border-[var(--border)] gap-3 flex-shrink-0">
+        {/* Premium layered logo mark */}
         <motion.div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          className="relative w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{
-            background: 'linear-gradient(135deg, rgba(14,165,233,0.3), rgba(139,92,246,0.3))',
-            border: '1px solid rgba(14,165,233,0.3)',
-            boxShadow: '0 0 12px rgba(14,165,233,0.2)',
+            background: 'linear-gradient(145deg, rgba(14,165,233,0.25) 0%, rgba(139,92,246,0.25) 100%)',
+            border: '1px solid rgba(14,165,233,0.25)',
+            boxShadow: '0 0 0 1px rgba(139,92,246,0.1) inset',
           }}
-          animate={{ boxShadow: ['0 0 8px rgba(14,165,233,0.15)', '0 0 16px rgba(14,165,233,0.3)', '0 0 8px rgba(14,165,233,0.15)'] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          animate={{
+            boxShadow: [
+              '0 0 8px rgba(14,165,233,0.12), 0 0 0 1px rgba(139,92,246,0.1) inset',
+              '0 0 18px rgba(14,165,233,0.28), 0 0 0 1px rgba(139,92,246,0.15) inset',
+              '0 0 8px rgba(14,165,233,0.12), 0 0 0 1px rgba(139,92,246,0.1) inset',
+            ],
+          }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <Stethoscope className="w-4 h-4 text-cyan-400" />
+          {/* Layered icon: cross + neural dot */}
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="6.5" y="2" width="3" height="12" rx="1.5" fill="url(#brandGrad)" />
+            <rect x="2" y="6.5" width="12" height="3" rx="1.5" fill="url(#brandGrad)" />
+            <circle cx="8" cy="8" r="2" fill="url(#brandGrad2)" opacity="0.9" />
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="16" y2="16" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#0ea5e9" />
+                <stop offset="100%" stopColor="#8b5cf6" />
+              </linearGradient>
+              <linearGradient id="brandGrad2" x1="0" y1="0" x2="16" y2="16" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.9" />
+              </linearGradient>
+            </defs>
+          </svg>
         </motion.div>
 
         <AnimatePresence>
@@ -199,8 +254,15 @@ export function Sidebar() {
               transition={{ duration: 0.12 }}
               className="overflow-hidden flex-1"
             >
-              <p className="text-sm font-bold text-[var(--text-1)] whitespace-nowrap leading-none">PA Review</p>
-              <p className="text-[10px] text-[var(--text-4)] whitespace-nowrap mt-0.5">AI Platform</p>
+              <p
+                className="text-sm font-bold whitespace-nowrap leading-none text-gradient-brand"
+                style={{ fontFamily: 'Manrope, sans-serif', letterSpacing: '-0.01em' }}
+              >
+                ClinicalAI
+              </p>
+              <p className="text-[10px] text-[var(--text-4)] whitespace-nowrap mt-0.5 tracking-wide">
+                Utilization Management
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -217,7 +279,7 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* System status */}
+      {/* System health status */}
       <AnimatePresence>
         {!collapsed && (
           <motion.div
@@ -225,54 +287,81 @@ export function Sidebar() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className="mx-3 mt-3 px-3 py-2 rounded-lg flex items-center gap-2"
-            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}
+            style={{
+              background: health.isUnhealthy ? 'rgba(239,68,68,0.07)' : health.isDegraded ? 'rgba(245,158,11,0.07)' : 'rgba(16,185,129,0.07)',
+              border: `1px solid ${healthColor}28`,
+            }}
           >
-            <Activity className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-            <span className="text-[11px] text-emerald-400 font-medium">All systems operational</span>
+            <AIPulse size={6} color={healthColor} rings={2} />
+            <span className="text-[11px] font-medium" style={{ color: healthColor }}>{healthLabel}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Primary navigation */}
-      <nav aria-label="Main navigation" className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {PRIMARY_NAV.map((item) => (
-          <NavButton
-            key={item.to}
-            item={item}
-            collapsed={collapsed}
-            visible={isVisible(item)}
-            onClose={handleNavClose}
-            onPrefetch={handlePrefetch}
-          />
-        ))}
+      {/* Primary navigation — grouped */}
+      <nav aria-label="Main navigation" className="flex-1 px-2 overflow-y-auto overflow-x-hidden">
+        {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter(isVisible)
+          if (visibleItems.length === 0) return null
+          return (
+            <div key={group.label}>
+              <AnimatePresence>
+                {!collapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                    className="nav-section-label"
+                  >
+                    {group.label}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+              {collapsed && <div className="my-2 h-px bg-[var(--border)] mx-2 first:hidden" />}
+              <div className="space-y-0.5 pb-1">
+                {visibleItems.map((item) => (
+                  <NavButton
+                    key={item.to}
+                    item={item}
+                    collapsed={collapsed}
+                    visible={true}
+                    onClose={handleNavClose}
+                    onPrefetch={handlePrefetch}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
 
         {visibleAdmin.length > 0 && (
           <>
             <AnimatePresence>
               {!collapsed && (
-                <motion.div
+                <motion.span
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="pt-3 pb-1 px-3"
+                  className="nav-section-label"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-4)]">
-                    Admin
-                  </p>
-                </motion.div>
+                  ADMIN
+                </motion.span>
               )}
             </AnimatePresence>
-            {collapsed && <div className="my-2 mx-3 border-t border-[var(--border)]" />}
-            {visibleAdmin.map((item) => (
-              <NavButton
-                key={item.to}
-                item={item}
-                collapsed={collapsed}
-                visible={true}
-                onClose={handleNavClose}
-                onPrefetch={handlePrefetch}
-              />
-            ))}
+            {collapsed && <div className="my-2 h-px bg-[var(--border)] mx-2" />}
+            <div className="space-y-0.5 pb-1">
+              {visibleAdmin.map((item) => (
+                <NavButton
+                  key={item.to}
+                  item={item}
+                  collapsed={collapsed}
+                  visible={true}
+                  onClose={handleNavClose}
+                  onPrefetch={handlePrefetch}
+                />
+              ))}
+            </div>
           </>
         )}
       </nav>
@@ -280,30 +369,32 @@ export function Sidebar() {
       {/* Divider */}
       <div className="mx-3 border-t border-[var(--border)]" />
 
-      {/* HIPAA badge */}
+      {/* HIPAA / compliance badge */}
       <AnimatePresence>
         {!collapsed && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mx-3 my-2 px-3 py-2 rounded-lg flex items-center gap-2"
+            className="mx-3 my-2 px-3 py-1.5 rounded-lg flex items-center gap-2"
             style={{ background: 'var(--elevated)' }}
           >
-            <Lock className="w-3 h-3 text-[var(--text-4)] flex-shrink-0" />
-            <span className="text-[10px] text-[var(--text-4)]">HIPAA Compliant · SOC 2</span>
+            <Shield className="w-3 h-3 text-[var(--text-4)] flex-shrink-0" />
+            <span className="text-[10px] text-[var(--text-4)]">HIPAA Compliant · SOC 2 Type II</span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* User card */}
-      <div className={cn('px-2 mx-1 py-2 rounded-lg', !collapsed && 'bg-[var(--elevated)] mb-1 mx-2')}>
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.8), rgba(139,92,246,0.8))' }}
-          >
-            {user?.name?.[0]?.toUpperCase() ?? 'U'}
+      <div className={cn('px-2 py-2', !collapsed && 'bg-[var(--elevated)] mb-1 mx-2 rounded-xl')}>
+        <div className="flex items-center gap-2.5 px-1">
+          <div className={cn('status-ring', healthRingCls, 'flex-shrink-0')}>
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+              style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.85), rgba(139,92,246,0.85))' }}
+            >
+              {user?.name?.[0]?.toUpperCase() ?? 'U'}
+            </div>
           </div>
           <AnimatePresence>
             {!collapsed && (
@@ -313,7 +404,7 @@ export function Sidebar() {
                 exit={{ opacity: 0 }}
                 className="flex-1 min-w-0"
               >
-                <p className="text-xs font-medium text-[var(--text-1)] truncate leading-none">{user?.name ?? 'User'}</p>
+                <p className="text-xs font-semibold text-[var(--text-1)] truncate leading-none">{user?.name ?? 'User'}</p>
                 <p className="text-[10px] text-[var(--text-3)] capitalize mt-0.5">{user?.role ?? 'reviewer'}</p>
               </motion.div>
             )}

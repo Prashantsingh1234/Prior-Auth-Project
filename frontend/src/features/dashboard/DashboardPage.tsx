@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { RefreshCw, TrendingUp, Clock, ChevronDown } from 'lucide-react'
+import { TrendingUp, Clock, ChevronDown, Zap, Target } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useKPIMetrics, useSystemStats } from './hooks/useDashboardData'
+import { AIPulse }                from '@/components/animations/AIPulse'
 import { KPIGrid }                from './widgets/KPIGrid'
 import { AIActivityFeed }         from './widgets/AIActivityFeed'
 import { ReviewerWorkload }       from './widgets/ReviewerWorkload'
@@ -16,23 +17,51 @@ import { cn } from '@/lib/utils'
 
 function LiveBadge() {
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-      <span className="text-[10px] font-medium text-emerald-400">LIVE</span>
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+      <AIPulse size={6} color="#10b981" rings={2} />
+      <span className="text-[10px] font-semibold text-emerald-400 tracking-wide">LIVE</span>
     </div>
   )
 }
 
-// ─── Header stat ─────────────────────────────────────────────────────────────
+// ─── Executive metric pill ────────────────────────────────────────────────────
 
-function HeaderStat({ icon: Icon, label, value, color }: {
-  icon: React.ElementType; label: string; value: string; color: string
+function ExecStat({ icon: Icon, label, value, color, delta }: {
+  icon: React.ElementType; label: string; value: string; color: string; delta?: string
 }) {
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl" style={{ background: 'var(--elevated)' }}>
-      <Icon style={{ color, width: 13, height: 13 }} />
-      <span className="text-[10px] text-[var(--text-4)] hidden sm:inline">{label}</span>
-      <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>{value}</span>
+    <motion.div
+      whileHover={{ y: -1 }}
+      className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors"
+      style={{
+        background: `${color}0d`,
+        borderColor: `${color}22`,
+      }}
+    >
+      <div
+        className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ background: `${color}18` }}
+      >
+        <Icon style={{ color, width: 12, height: 12 }} />
+      </div>
+      <div>
+        <p className="text-[10px] text-[var(--text-4)] leading-none">{label}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className="text-[13px] font-bold tabular-nums leading-none" style={{ color }}>{value}</span>
+          {delta && <span className="text-[10px] text-emerald-400 font-medium">{delta}</span>}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Section heading ──────────────────────────────────────────────────────────
+
+function SectionHeading({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <span className="nav-section-label" style={{ padding: 0 }}>{label}</span>
+      <div className="flex-1 h-px bg-[var(--border)]" />
     </div>
   )
 }
@@ -80,68 +109,111 @@ export function DashboardPage() {
   const avgMs  = kpi?.avgReviewMs ?? 3500
   const avgSec = (avgMs / 1000).toFixed(1)
   const aiAcc  = kpi?.aiAccuracy ?? 0.942
+  const approvalRate = kpi?.approvalRate ?? 0.508
 
   return (
-    <div className="min-h-full p-4 sm:p-6 space-y-4 sm:space-y-6 max-content">
+    <div className="min-h-full space-y-0 max-content">
 
-      {/* Page header */}
+      {/* ── Mission Control hero header ─────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: -8 }}
+        initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex items-start justify-between flex-wrap gap-3 sm:gap-4"
+        transition={{ duration: 0.35 }}
+        className="hero-mesh px-4 sm:px-6 pt-6 pb-5 border-b border-[var(--border)]"
+        style={{ background: 'var(--surface)' }}
       >
-        <div>
-          <h1 className="text-lg sm:text-xl font-bold text-[var(--text-1)]">Operations Dashboard</h1>
-          <p className="text-xs sm:text-sm text-[var(--text-4)] mt-0.5">
-            Prior Authorization · Real-time overview
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <LiveBadge />
-          <HeaderStat icon={TrendingUp} label="AI Accuracy"  value={`${(aiAcc * 100).toFixed(1)}%`}  color="#8b5cf6" />
-          <HeaderStat icon={Clock}      label="Avg Review"   value={`${avgSec}s`}                     color="#0ea5e9" />
-          <HeaderStat icon={RefreshCw}  label="OCR Rate"     value={`${((sys?.ocrSuccessRate ?? 0.974) * 100).toFixed(1)}%`} color="#10b981" />
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          {/* Title block */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <LiveBadge />
+              <span className="text-[10px] text-[var(--text-4)] font-medium tracking-widest uppercase">
+                Prior Authorization
+              </span>
+            </div>
+            <h1
+              className="text-2xl sm:text-3xl font-bold leading-tight text-gradient-brand"
+              style={{ fontFamily: 'Manrope, sans-serif', letterSpacing: '-0.02em' }}
+            >
+              AI Operations Center
+            </h1>
+            <p className="text-xs sm:text-sm text-[var(--text-3)] mt-1">
+              Real-time clinical intelligence · Utilization management platform
+            </p>
+          </div>
+
+          {/* Executive stats */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <ExecStat icon={TrendingUp} label="AI Accuracy"  value={`${(aiAcc * 100).toFixed(1)}%`}       color="#8b5cf6" delta="↑ 0.3%" />
+            <ExecStat icon={Clock}      label="Avg Review"   value={`${avgSec}s`}                         color="#0ea5e9" />
+            <ExecStat icon={Target}     label="Approval Rate" value={`${(approvalRate * 100).toFixed(0)}%`} color="#10b981" />
+            <ExecStat icon={Zap}        label="OCR Success"  value={`${((sys?.ocrSuccessRate ?? 0.974) * 100).toFixed(1)}%`} color="#f59e0b" />
+          </div>
         </div>
       </motion.div>
 
-      {/* KPI cards */}
-      <Section title="Key Metrics">
-        <KPIGrid />
-      </Section>
+      {/* ── Page body ────────────────────────────────────────────────────────── */}
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
 
-      {/* Main grid — single col → 3 col */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-
-        {/* Left / main column */}
-        <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-          <Section title="Confidence Trends">
-            <ConfidenceTrends />
-          </Section>
-          <Section title="Reviewer Workload">
-            <ReviewerWorkload />
-          </Section>
-          <Section title="Clarification Frequency">
-            <ClarificationFrequency />
+        {/* KPI cards */}
+        <div>
+          <SectionHeading label="Key Performance Indicators" />
+          <Section title="Key Metrics">
+            <KPIGrid />
           </Section>
         </div>
 
-        {/* Right column */}
-        <div className="space-y-4 sm:space-y-6">
-          <Section title="Outcome Distribution">
-            <OutcomeDistribution />
-          </Section>
-          <Section title="System Health">
-            <SystemMetrics />
+        {/* Main grid — single col → 3 col */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+
+          {/* Left / main column */}
+          <div className="xl:col-span-2 space-y-6 sm:space-y-8">
+            <div>
+              <SectionHeading label="AI Confidence Trends" />
+              <Section title="Confidence Trends">
+                <ConfidenceTrends />
+              </Section>
+            </div>
+            <div>
+              <SectionHeading label="Reviewer Workload" />
+              <Section title="Reviewer Workload">
+                <ReviewerWorkload />
+              </Section>
+            </div>
+            <div>
+              <SectionHeading label="Clarification Requests" />
+              <Section title="Clarification Frequency">
+                <ClarificationFrequency />
+              </Section>
+            </div>
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-6 sm:space-y-8">
+            <div>
+              <SectionHeading label="Decision Outcomes" />
+              <Section title="Outcome Distribution">
+                <OutcomeDistribution />
+              </Section>
+            </div>
+            <div>
+              <SectionHeading label="System Health" />
+              <Section title="System Health">
+                <SystemMetrics />
+              </Section>
+            </div>
+          </div>
+        </div>
+
+        {/* Full-width activity feed */}
+        <div>
+          <SectionHeading label="AI Activity Feed" />
+          <Section title="AI Activity">
+            <AIActivityFeed />
           </Section>
         </div>
+
       </div>
-
-      {/* Full-width activity feed */}
-      <Section title="AI Activity">
-        <AIActivityFeed />
-      </Section>
-
     </div>
   )
 }

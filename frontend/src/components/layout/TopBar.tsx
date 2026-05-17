@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   Bell, Sun, Moon, Monitor, Search, Brain,
   ChevronDown, LogOut, Settings, User, Keyboard, Menu, X,
+  Sparkles,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useHealth } from '@/hooks/useHealth'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/config/routes.config'
 
@@ -26,6 +28,7 @@ export function TopBar() {
   const logout  = useLogout()
   const navigate = useNavigate()
   const isMd    = useBreakpoint('md')
+  const health  = useHealth()
 
   const [userMenuOpen,   setUserMenuOpen]   = useState(false)
   const [searchExpanded, setSearchExpanded] = useState(false)
@@ -130,7 +133,33 @@ export function TopBar() {
 
       <div className="flex-1" />
 
-      {/* AI Assistant toggle */}
+      {/* System health pill — desktop only */}
+      <AnimatePresence>
+        {isMd && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium"
+            style={{
+              background: health.isUnhealthy
+                ? 'rgba(239,68,68,0.08)' : health.isDegraded
+                ? 'rgba(245,158,11,0.08)' : 'rgba(16,185,129,0.07)',
+              borderColor: health.isUnhealthy
+                ? 'rgba(239,68,68,0.2)' : health.isDegraded
+                ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)',
+              color: health.isUnhealthy ? '#ef4444' : health.isDegraded ? '#f59e0b' : '#10b981',
+            }}
+          >
+            <span
+              className={cn('health-dot', health.isUnhealthy ? 'health-dot-down' : health.isDegraded ? 'health-dot-degraded' : 'health-dot-ok')}
+            />
+            {health.isUnhealthy ? 'System Degraded' : health.isDegraded ? 'Partial Outage' : 'Operational'}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Assistant toggle — premium gradient when active */}
       <motion.button
         onClick={() => setAIPanelOpen(!aiPanelOpen)}
         whileHover={{ scale: 1.02 }}
@@ -138,19 +167,23 @@ export function TopBar() {
         className={cn(
           'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium transition-all border',
           aiPanelOpen
-            ? 'bg-violet-500/15 text-violet-400 border-violet-500/25'
-            : 'text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--elevated)] hover:text-[var(--text-1)]',
+            ? 'text-white border-transparent'
+            : 'text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--elevated)] hover:text-violet-400 hover:border-violet-500/25',
         )}
+        style={aiPanelOpen ? {
+          background: 'linear-gradient(135deg, rgba(139,92,246,0.85) 0%, rgba(14,165,233,0.85) 100%)',
+          boxShadow: '0 0 20px rgba(139,92,246,0.3), 0 2px 8px rgba(0,0,0,0.2)',
+        } : {}}
       >
         <motion.div
           animate={aiPanelOpen ? {
-            boxShadow: ['0 0 0 0 rgba(139,92,246,0)', '0 0 8px 2px rgba(139,92,246,0.4)', '0 0 0 0 rgba(139,92,246,0)'],
+            rotate: [0, 15, -10, 5, 0],
           } : {}}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 0.5, ease: 'easeInOut' }}
         >
-          <Brain className="w-3.5 h-3.5" />
+          {aiPanelOpen ? <Sparkles className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
         </motion.div>
-        <span className="hidden sm:inline">AI Assistant</span>
+        <span className="hidden sm:inline">{aiPanelOpen ? 'AI Active' : 'AI Assistant'}</span>
       </motion.button>
 
       {/* Theme toggle — hidden on small mobile */}
