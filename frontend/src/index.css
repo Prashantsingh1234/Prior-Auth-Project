@@ -243,6 +243,39 @@
   .skip-link { forced-color-adjust: none; }
 }
 
+/* ── Shimmer skeleton sweep ──────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent                      0%,
+    rgba(255, 255, 255, 0.07)       50%,
+    transparent                     100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+.dark .shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent                      0%,
+    rgba(255, 255, 255, 0.04)       50%,
+    transparent                     100%
+  );
+  background-size: 200% 100%;
+}
+
 /* ── Recharts dark mode ──────────────────────────────────────────────────── */
 .dark .recharts-cartesian-grid-horizontal line,
 .dark .recharts-cartesian-grid-vertical line { stroke: #1e293b; }

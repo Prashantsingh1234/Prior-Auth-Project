@@ -5,6 +5,7 @@ import {
   Shield, Zap, ArrowUpRight,
 } from 'lucide-react'
 import { useActivityFeed, type ActivityEvent } from '../hooks/useDashboardData'
+import { AIPulse } from '@/components/animations/AIPulse'
 import { cn } from '@/lib/utils'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ export function AIActivityFeed() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <AIPulse size={7} color="#10b981" rings={2} />
           <span className="text-sm font-semibold text-[var(--text-1)]">AI Activity Feed</span>
         </div>
         <span className="text-[10px] text-[var(--text-4)] tabular-nums">

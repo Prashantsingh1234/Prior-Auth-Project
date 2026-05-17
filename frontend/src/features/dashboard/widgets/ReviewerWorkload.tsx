@@ -92,10 +92,10 @@ export function ReviewerWorkload() {
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-            <Bar dataKey="Approved"   stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="In Review"  stackId="a" fill="#0ea5e9" />
-            <Bar dataKey="Denied"     stackId="a" fill="#ef4444" />
-            <Bar dataKey="Pending"    stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Approved"   stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} animationDuration={800} animationBegin={200} />
+            <Bar dataKey="In Review"  stackId="a" fill="#0ea5e9" animationDuration={800} animationBegin={300} />
+            <Bar dataKey="Denied"     stackId="a" fill="#ef4444" animationDuration={800} animationBegin={400} />
+            <Bar dataKey="Pending"    stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} animationDuration={800} animationBegin={500} />
           </BarChart>
         </ResponsiveContainer>
         <CustomLegend />

@@ -1,23 +1,30 @@
-﻿import { cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  hover?: boolean
+  hover?:  boolean
   padded?: boolean
 }
 
-export function Card({ className, hover, padded = true, children, ...props }: CardProps) {
+export function Card({ className, hover, padded = true, children, onClick, style, id }: CardProps) {
+  const base = cn(
+    'rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-card',
+    padded && 'p-5',
+    hover  && 'cursor-pointer',
+    className,
+  )
+
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-card',
-        hover && 'transition-all duration-200 hover:shadow-card-md hover:-translate-y-0.5 cursor-pointer',
-        padded && 'p-5',
-        className
-      )}
-      {...props}
+    <motion.div
+      className={base}
+      whileHover={hover ? { y: -2, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' } : undefined}
+      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+      onClick={onClick}
+      style={style}
+      id={id}
     >
       {children}
-    </div>
+    </motion.div>
   )
 }
 

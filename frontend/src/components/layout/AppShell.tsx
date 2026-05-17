@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+
+import { PageTransition }      from '@/components/animations/PageTransition'
 import { Sidebar }             from './Sidebar'
 import { TopBar }              from './TopBar'
 import { WorkspaceTabs }       from './WorkspaceTabs'
@@ -72,7 +73,7 @@ export function AppShell() {
 
         {/* Page content */}
         <main id="main-content" role="main" className="flex-1 overflow-y-auto overflow-x-hidden">
-          <Outlet />
+          <PageTransition />
         </main>
       </div>
 

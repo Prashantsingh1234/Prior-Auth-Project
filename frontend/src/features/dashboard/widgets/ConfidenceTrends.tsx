@@ -94,7 +94,7 @@ export function ConfidenceTrends() {
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--border)' }} />
-            {BANDS.map(({ key, color }) => (
+            {BANDS.map(({ key, color }, i) => (
               <Area
                 key={key}
                 type="monotone"
@@ -103,6 +103,8 @@ export function ConfidenceTrends() {
                 stroke={color}
                 strokeWidth={1.5}
                 fill={`url(#cg-${key})`}
+                animationDuration={900}
+                animationBegin={i * 80}
               />
             ))}
           </AreaChart>

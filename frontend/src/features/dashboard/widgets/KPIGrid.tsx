@@ -87,8 +87,9 @@ function KPICard({ label, value, delta, icon: Icon, iconColor, glowColor, sparkD
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3, boxShadow: `0 12px 32px rgba(0,0,0,0.14), 0 0 0 1px ${glowColor}20` }}
       transition={{ delay, duration: 0.35, ease: 'easeOut' }}
-      className="relative rounded-2xl p-5 overflow-hidden flex flex-col gap-3 group"
+      className="relative rounded-2xl p-5 overflow-hidden flex flex-col gap-3 group cursor-default"
       style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -98,7 +99,7 @@ function KPICard({ label, value, delta, icon: Icon, iconColor, glowColor, sparkD
       {/* Subtle glow on hover */}
       <div
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
-        style={{ background: `radial-gradient(circle at 30% 50%, ${glowColor}08 0%, transparent 70%)` }}
+        style={{ background: `radial-gradient(circle at 30% 50%, ${glowColor}12 0%, transparent 70%)` }}
       />
 
       {/* Header */}
