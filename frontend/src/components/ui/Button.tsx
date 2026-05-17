@@ -1,4 +1,4 @@
-﻿import { forwardRef } from 'react'
+import { forwardRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
@@ -42,9 +42,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : leftIcon}
+      {loading
+        ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+        : leftIcon
+      }
       {children}
       {!loading && rightIcon}
     </button>

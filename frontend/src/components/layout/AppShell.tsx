@@ -8,6 +8,7 @@ import { CommandPalette }      from './CommandPalette'
 import { NotificationsPanel }  from './NotificationsPanel'
 import { AIAssistantPanel }    from './AIAssistantPanel'
 import { ReconnectBanner, SystemAlertBanner } from '@/components/realtime'
+import { SkipLink }            from '@/components/a11y'
 import { useUIStore }          from '@/store/uiStore'
 import { useWebSocketBridge }  from '@/hooks/useWebSocket'
 import { useBreakpoint }       from '@/hooks/useBreakpoint'
@@ -36,6 +37,8 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-[var(--bg)] overflow-hidden">
+
+      <SkipLink />
 
       {/* Mobile overlay backdrop */}
       {!isDesktop && mobileSidebarOpen && (
@@ -68,7 +71,7 @@ export function AppShell() {
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main id="main-content" role="main" className="flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>

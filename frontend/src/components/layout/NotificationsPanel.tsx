@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
-  X, Bell, CheckCheck, Trash2, Brain, ClipboardList,
-  AlertTriangle, CheckCircle2, Info, Activity,
+  X, Bell, CheckCheck, Trash2,
+  AlertTriangle, CheckCircle2, Info,
 } from 'lucide-react'
 import { useUIStore, type Notification } from '@/store/uiStore'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { cn, formatRelative } from '@/lib/utils'
 
 type FilterTab = 'all' | 'cases' | 'ai' | 'system'
@@ -36,9 +37,9 @@ function groupByDate(notifications: Notification[]) {
 
   notifications.forEach((n) => {
     const d = new Date(n.timestamp); d.setHours(0, 0, 0, 0)
-    if (d >= today)                              groups[0].items.push(n)
-    else if (d >= yesterday && d < today)        groups[1].items.push(n)
-    else                                         groups[2].items.push(n)
+    if (d >= today)                       groups[0].items.push(n)
+    else if (d >= yesterday && d < today) groups[1].items.push(n)
+    else                                  groups[2].items.push(n)
   })
 
   return groups.filter((g) => g.items.length > 0)
@@ -63,19 +64,22 @@ function NotifItem({ n, onDismiss, onRead }: { n: Notification; onDismiss: () =>
       transition={{ duration: 0.2 }}
       className={cn(
         'group flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0',
-        'hover:bg-[var(--elevated)] cursor-pointer transition-colors',
+        'hover:bg-[var(--elevated)] transition-colors',
         !n.read && 'bg-cyan-500/[0.03]',
       )}
-      onClick={handleClick}
     >
-      <div className="relative mt-0.5 flex-shrink-0">
+      <div className="relative mt-0.5 flex-shrink-0" aria-hidden="true">
         <Icon className={cn('w-4 h-4', COLOR_MAP[n.type])} />
         {!n.read && (
           <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-cyan-500" />
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
+      <button
+        onClick={handleClick}
+        className="flex-1 min-w-0 text-left"
+        aria-label={`${n.title}${n.read ? '' : ' (unread)'}. ${n.message ?? ''}`}
+      >
         <p className={cn('text-sm leading-snug', !n.read ? 'text-[var(--text-1)] font-medium' : 'text-[var(--text-2)]')}>
           {n.title}
         </p>
@@ -83,13 +87,14 @@ function NotifItem({ n, onDismiss, onRead }: { n: Notification; onDismiss: () =>
           <p className="text-xs text-[var(--text-3)] mt-0.5 line-clamp-2">{n.message}</p>
         )}
         <p className="text-[10px] text-[var(--text-4)] mt-1">{formatRelative(n.timestamp)}</p>
-      </div>
+      </button>
 
       <button
-        onClick={(e) => { e.stopPropagation(); onDismiss() }}
-        className="opacity-0 group-hover:opacity-100 text-[var(--text-4)] hover:text-[var(--text-2)] transition-all flex-shrink-0 mt-0.5"
+        onClick={onDismiss}
+        aria-label={`Dismiss: ${n.title}`}
+        className="text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors flex-shrink-0 mt-0.5 p-1 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       >
-        <X className="w-3.5 h-3.5" />
+        <X className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
     </motion.div>
   )
@@ -101,6 +106,9 @@ export function NotificationsPanel() {
     notifications, unreadCount, markAllRead, markRead, dismissNotification,
   } = useUIStore()
   const [filter, setFilter] = useState<FilterTab>('all')
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useFocusTrap(panelRef, notificationsPanelOpen)
 
   const filtered = notifications.filter((n) => {
     if (filter === 'all')    return true
@@ -131,10 +139,15 @@ export function NotificationsPanel() {
             transition={{ duration: 0.2 }}
             onClick={() => setNotificationsPanelOpen(false)}
             className="fixed inset-0 z-[38] bg-black"
+            aria-hidden="true"
           />
 
           {/* Panel */}
           <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notif-panel-title"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -145,10 +158,13 @@ export function NotificationsPanel() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border)] flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <Bell className="w-4 h-4 text-[var(--text-2)]" />
-                <span className="text-sm font-semibold text-[var(--text-1)]">Notifications</span>
+                <Bell className="w-4 h-4 text-[var(--text-2)]" aria-hidden="true" />
+                <span id="notif-panel-title" className="text-sm font-semibold text-[var(--text-1)]">Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-400">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-400"
+                    aria-label={`${unreadCount} unread`}
+                  >
                     {unreadCount}
                   </span>
                 )}
@@ -157,26 +173,33 @@ export function NotificationsPanel() {
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllRead}
+                    aria-label="Mark all notifications as read"
                     className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
-                    title="Mark all read"
                   >
-                    <CheckCheck className="w-3.5 h-3.5" />
+                    <CheckCheck className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 )}
                 <button
                   onClick={() => setNotificationsPanelOpen(false)}
+                  aria-label="Close notifications"
                   className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--elevated)] transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             {/* Filter tabs */}
-            <div className="flex px-4 gap-0.5 py-2 border-b border-[var(--border)] flex-shrink-0">
+            <div
+              role="tablist"
+              aria-label="Filter notifications"
+              className="flex px-4 gap-0.5 py-2 border-b border-[var(--border)] flex-shrink-0"
+            >
               {TABS.map((t) => (
                 <button
                   key={t.id}
+                  role="tab"
+                  aria-selected={filter === t.id}
                   onClick={() => setFilter(t.id)}
                   className={cn(
                     'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
@@ -191,10 +214,10 @@ export function NotificationsPanel() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" role="region" aria-label="Notification list" aria-live="polite">
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center p-8">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--elevated)] flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--elevated)] flex items-center justify-center" aria-hidden="true">
                     <Bell className="w-5 h-5 text-[var(--text-4)]" />
                   </div>
                   <p className="text-sm text-[var(--text-3)]">No notifications</p>
@@ -228,8 +251,9 @@ export function NotificationsPanel() {
                 <button
                   onClick={() => useUIStore.getState().clearNotifications()}
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-[var(--text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                  aria-label="Clear all notifications"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   Clear all notifications
                 </button>
               </div>

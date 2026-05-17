@@ -206,6 +206,43 @@
 /* ── Focus visible ───────────────────────────────────────────────────────── */
 :focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; border-radius: 4px; }
 
+/* ── Skip navigation link ────────────────────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -56px;
+  left: 8px;
+  z-index: 9999;
+  padding: 8px 20px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 8px 8px;
+  transition: top 0.15s ease;
+  white-space: nowrap;
+}
+.skip-link:focus { top: 0; outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:       0.01ms !important;
+    animation-iteration-count: 1    !important;
+    transition-duration:      0.01ms !important;
+    scroll-behavior:          auto  !important;
+  }
+}
+
+/* ── Forced colors (Windows High Contrast) ───────────────────────────────── */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid ButtonText;
+    outline-offset: 2px;
+  }
+  .skip-link { forced-color-adjust: none; }
+}
+
 /* ── Recharts dark mode ──────────────────────────────────────────────────── */
 .dark .recharts-cartesian-grid-horizontal line,
 .dark .recharts-cartesian-grid-vertical line { stroke: #1e293b; }

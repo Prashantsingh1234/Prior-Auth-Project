@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
-  Search, LayoutDashboard, ClipboardList, BarChart3, BookOpen,
+  LayoutDashboard, ClipboardList, BarChart3, BookOpen,
   FileText, Settings, Users, Brain, Activity, Zap, ArrowRight,
-  Clock, X, Command,
+  X, Command,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { usePermissions } from '@/hooks'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/config/routes.config'
 
@@ -34,23 +35,20 @@ function useCommands(): CommandItem[] {
   const { setCommandOpen, setAIPanelOpen } = useUIStore()
 
   const close = () => setCommandOpen(false)
-
-  const go = (path: string) => { navigate(path); close() }
+  const go    = (path: string) => { navigate(path); close() }
 
   return useMemo(() => {
     const all: CommandItem[] = [
-      // Navigation
-      { id: 'nav-dashboard',  category: 'navigation', label: 'Dashboard',          icon: LayoutDashboard, shortcut: 'G D', action: () => go(ROUTES.DASHBOARD) },
-      { id: 'nav-cases',      category: 'navigation', label: 'Case Queue',          icon: ClipboardList,  shortcut: 'G C', action: () => go(ROUTES.CASES) },
-      { id: 'nav-analytics',  category: 'navigation', label: 'AI Analytics',        icon: BarChart3,      shortcut: 'G A', action: () => go(ROUTES.ANALYTICS),  permission: 'analytics:read' },
-      { id: 'nav-policies',   category: 'navigation', label: 'Policies',            icon: BookOpen,                        action: () => go(ROUTES.POLICIES),   permission: 'policies:read' },
-      { id: 'nav-audit',      category: 'navigation', label: 'Audit Log',           icon: FileText,       shortcut: 'G U', action: () => go(ROUTES.AUDIT),      permission: 'audit:read' },
-      { id: 'nav-monitoring', category: 'navigation', label: 'System Monitoring',   icon: Activity,                        action: () => go(ROUTES.MONITORING) },
-      { id: 'nav-users',      category: 'navigation', label: 'User Management',     icon: Users,                           action: () => go(ROUTES.USERS),      permission: 'admin:users' },
-      { id: 'nav-settings',   category: 'navigation', label: 'Settings',            icon: Settings,       shortcut: 'G S', action: () => go(ROUTES.SETTINGS),   permission: 'admin:settings' },
-      // Actions
-      { id: 'act-ai-panel',   category: 'actions',    label: 'Open AI Assistant',   description: 'Chat with the PA Review AI', icon: Brain,  shortcut: '⌥A', action: () => { setAIPanelOpen(true); close() } },
-      { id: 'act-new-case',   category: 'actions',    label: 'Submit New Case',     description: 'Start a new prior authorization', icon: Zap,   shortcut: '⌘N', action: () => { go(`${ROUTES.CASES}/new`) }, permission: 'cases:write' },
+      { id: 'nav-dashboard',  category: 'navigation', label: 'Dashboard',        icon: LayoutDashboard, shortcut: 'G D', action: () => go(ROUTES.DASHBOARD) },
+      { id: 'nav-cases',      category: 'navigation', label: 'Case Queue',        icon: ClipboardList,  shortcut: 'G C', action: () => go(ROUTES.CASES) },
+      { id: 'nav-analytics',  category: 'navigation', label: 'AI Analytics',      icon: BarChart3,      shortcut: 'G A', action: () => go(ROUTES.ANALYTICS),  permission: 'analytics:read' },
+      { id: 'nav-policies',   category: 'navigation', label: 'Policies',          icon: BookOpen,                        action: () => go(ROUTES.POLICIES),   permission: 'policies:read' },
+      { id: 'nav-audit',      category: 'navigation', label: 'Audit Log',         icon: FileText,       shortcut: 'G U', action: () => go(ROUTES.AUDIT),      permission: 'audit:read' },
+      { id: 'nav-monitoring', category: 'navigation', label: 'System Monitoring', icon: Activity,                        action: () => go(ROUTES.MONITORING) },
+      { id: 'nav-users',      category: 'navigation', label: 'User Management',   icon: Users,                           action: () => go(ROUTES.USERS),      permission: 'admin:users' },
+      { id: 'nav-settings',   category: 'navigation', label: 'Settings',          icon: Settings,       shortcut: 'G S', action: () => go(ROUTES.SETTINGS),   permission: 'admin:settings' },
+      { id: 'act-ai-panel',   category: 'actions',    label: 'Open AI Assistant', description: 'Chat with the PA Review AI', icon: Brain, shortcut: '⌥A', action: () => { setAIPanelOpen(true); close() } },
+      { id: 'act-new-case',   category: 'actions',    label: 'Submit New Case',   description: 'Start a new prior authorization', icon: Zap, shortcut: '⌘N', action: () => { go(`${ROUTES.CASES}/new`) }, permission: 'cases:write' },
     ]
     return all.filter((c) => !c.permission || can(c.permission as any))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,11 +66,14 @@ const CATEGORY_LABEL: Record<CommandCategory, string> = {
 
 export function CommandPalette() {
   const { commandOpen, setCommandOpen } = useUIStore()
-  const [query, setQuery]     = useState('')
+  const [query, setQuery]       = useState('')
   const [selected, setSelected] = useState(0)
-  const inputRef              = useRef<HTMLInputElement>(null)
-  const listRef               = useRef<HTMLDivElement>(null)
-  const commands              = useCommands()
+  const inputRef                = useRef<HTMLInputElement>(null)
+  const listRef                 = useRef<HTMLDivElement>(null)
+  const dialogRef               = useRef<HTMLDivElement>(null)
+  const commands                = useCommands()
+
+  useFocusTrap(dialogRef, commandOpen)
 
   // Global keyboard shortcut
   useEffect(() => {
@@ -81,18 +82,18 @@ export function CommandPalette() {
         e.preventDefault()
         setCommandOpen(true)
       }
-      if (e.key === 'Escape') setCommandOpen(false)
+      if (e.key === 'Escape' && commandOpen) setCommandOpen(false)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [setCommandOpen])
+  }, [setCommandOpen, commandOpen])
 
-  // Focus input when opened
+  // Focus input when opened (focus trap already runs, but input is preferred)
   useEffect(() => {
     if (commandOpen) {
       setQuery('')
       setSelected(0)
-      setTimeout(() => inputRef.current?.focus(), 60)
+      setTimeout(() => inputRef.current?.focus(), 80)
     }
   }, [commandOpen])
 
@@ -118,7 +119,7 @@ export function CommandPalette() {
 
   const flatItems = useMemo(() => filtered, [filtered])
 
-  // Keyboard navigation
+  // Keyboard navigation within list (arrow keys + enter)
   useEffect(() => {
     if (!commandOpen) return
     function onKey(e: KeyboardEvent) {
@@ -143,6 +144,8 @@ export function CommandPalette() {
     el?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
+  const activeDescendant = flatItems[selected] ? `cmd-opt-${flatItems[selected].id}` : undefined
+
   let globalIdx = -1
 
   return (
@@ -157,10 +160,15 @@ export function CommandPalette() {
             transition={{ duration: 0.15 }}
             onClick={() => setCommandOpen(false)}
             className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm"
+            aria-hidden="true"
           />
 
-          {/* Palette */}
+          {/* Dialog */}
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
@@ -172,36 +180,54 @@ export function CommandPalette() {
               className="overflow-hidden rounded-2xl"
               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
-              {/* Search input */}
+              {/* Combobox search input */}
               <div className="flex items-center gap-3 px-4 border-b border-[var(--border)]">
-                <Command className="w-4 h-4 text-[var(--text-3)] flex-shrink-0" />
+                <Command className="w-4 h-4 text-[var(--text-3)] flex-shrink-0" aria-hidden="true" />
                 <input
                   ref={inputRef}
+                  id="command-input"
+                  role="combobox"
+                  aria-expanded={filtered.length > 0}
+                  aria-haspopup="listbox"
+                  aria-controls="command-listbox"
+                  aria-activedescendant={activeDescendant}
+                  aria-label="Search commands"
+                  aria-autocomplete="list"
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setSelected(0) }}
                   placeholder="Search commands, cases, settings…"
                   className="flex-1 h-14 bg-transparent text-[var(--text-1)] text-base outline-none placeholder:text-[var(--text-4)]"
                 />
                 {query && (
-                  <button onClick={() => setQuery('')} className="text-[var(--text-3)] hover:text-[var(--text-2)]">
-                    <X className="w-4 h-4" />
+                  <button
+                    onClick={() => { setQuery(''); inputRef.current?.focus() }}
+                    aria-label="Clear search"
+                    className="text-[var(--text-3)] hover:text-[var(--text-2)]"
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
-                <kbd className="text-xs font-mono text-[var(--text-4)] border border-[var(--border)] px-1.5 py-0.5 rounded">
+                <kbd className="text-xs font-mono text-[var(--text-4)] border border-[var(--border)] px-1.5 py-0.5 rounded" aria-label="Press Escape to close">
                   ESC
                 </kbd>
               </div>
 
-              {/* Results */}
-              <div ref={listRef} className="max-h-80 overflow-y-auto py-2">
+              {/* Results listbox */}
+              <div
+                ref={listRef}
+                id="command-listbox"
+                role="listbox"
+                aria-label={`${filtered.length} command${filtered.length !== 1 ? 's' : ''}`}
+                className="max-h-80 overflow-y-auto py-2"
+              >
                 {filtered.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-[var(--text-3)]">
+                  <div role="status" className="py-10 text-center text-sm text-[var(--text-3)]">
                     No results for "{query}"
                   </div>
                 ) : (
                   Array.from(grouped.entries()).map(([category, items]) => (
-                    <div key={category}>
-                      <div className="px-4 py-1.5">
+                    <div key={category} role="group" aria-label={CATEGORY_LABEL[category]}>
+                      <div className="px-4 py-1.5" aria-hidden="true">
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-4)]">
                           {CATEGORY_LABEL[category]}
                         </span>
@@ -209,25 +235,28 @@ export function CommandPalette() {
                       {items.map((item) => {
                         const Icon = item.icon
                         globalIdx++
-                        const idx = globalIdx
+                        const idx        = globalIdx
                         const isSelected = selected === idx
 
                         return (
-                          <motion.button
+                          <motion.div
                             key={item.id}
+                            id={`cmd-opt-${item.id}`}
+                            role="option"
+                            aria-selected={isSelected}
                             data-idx={idx}
                             onClick={item.action}
                             onMouseEnter={() => setSelected(idx)}
                             whileTap={{ scale: 0.98 }}
                             className={cn(
-                              'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors',
+                              'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer',
                               isSelected ? 'bg-cyan-500/10' : 'hover:bg-[var(--elevated)]',
                             )}
                           >
                             <div className={cn(
                               'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
                               isSelected ? 'bg-cyan-500/20' : 'bg-[var(--elevated)]',
-                            )}>
+                            )} aria-hidden="true">
                               <Icon className={cn('w-3.5 h-3.5', isSelected ? 'text-cyan-400' : 'text-[var(--text-3)]')} />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -239,12 +268,12 @@ export function CommandPalette() {
                               )}
                             </div>
                             {item.shortcut && (
-                              <kbd className="text-[10px] font-mono text-[var(--text-4)] border border-[var(--border)] px-1.5 py-0.5 rounded flex-shrink-0">
+                              <kbd className="text-[10px] font-mono text-[var(--text-4)] border border-[var(--border)] px-1.5 py-0.5 rounded flex-shrink-0" aria-label={`Shortcut: ${item.shortcut}`}>
                                 {item.shortcut}
                               </kbd>
                             )}
-                            {isSelected && <ArrowRight className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />}
-                          </motion.button>
+                            {isSelected && <ArrowRight className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" aria-hidden="true" />}
+                          </motion.div>
                         )
                       })}
                     </div>
@@ -253,7 +282,7 @@ export function CommandPalette() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center gap-4 px-4 py-2.5 border-t border-[var(--border)]">
+              <div className="flex items-center gap-4 px-4 py-2.5 border-t border-[var(--border)]" aria-hidden="true">
                 {[['↑↓', 'navigate'], ['↵', 'select'], ['ESC', 'close']].map(([key, label]) => (
                   <span key={key} className="flex items-center gap-1.5 text-xs text-[var(--text-4)]">
                     <kbd className="font-mono border border-[var(--border)] px-1 py-0.5 rounded text-[10px]">{key}</kbd>

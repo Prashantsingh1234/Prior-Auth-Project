@@ -56,11 +56,12 @@ interface NavButtonProps {
 function NavButton({ item: { to, icon: Icon, label, badge }, collapsed, visible, onClose }: NavButtonProps) {
   if (!visible) return null
   return (
-    <NavLink to={to} end={to === '/dashboard'} onClick={onClose}>
+    <NavLink to={to} end={to === '/dashboard'} onClick={onClose} aria-label={collapsed ? label : undefined}>
       {({ isActive }) => (
         <motion.div
           whileHover={{ x: collapsed ? 0 : 2 }}
           whileTap={{ scale: 0.97 }}
+          aria-current={isActive ? 'page' : undefined}
           className={cn(
             'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative cursor-pointer',
             'min-h-[44px] md:min-h-0',
@@ -210,7 +211,7 @@ export function Sidebar() {
       </AnimatePresence>
 
       {/* Primary navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav aria-label="Main navigation" className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
         {PRIMARY_NAV.map((item) => (
           <NavButton
             key={item.to}
@@ -299,6 +300,7 @@ export function Sidebar() {
       <div className="px-2 pb-3 space-y-0.5">
         <button
           onClick={logout}
+          aria-label="Sign out"
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--text-2)] hover:bg-red-500/10 hover:text-red-400 transition-colors"
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />
@@ -315,6 +317,8 @@ export function Sidebar() {
         {isDesktop && (
           <button
             onClick={toggleSidebar}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--text-3)] hover:bg-[var(--elevated)] hover:text-[var(--text-2)] transition-colors"
           >
             {collapsed
