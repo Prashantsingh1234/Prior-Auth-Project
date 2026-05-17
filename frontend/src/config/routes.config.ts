@@ -12,6 +12,7 @@ export const ROUTES = {
   CASE:       '/cases/:caseId',
   REVIEW:     '/review/:caseId',
   ANALYTICS:  '/analytics',
+  INGESTION:  '/ingestion',
   POLICIES:   '/policies',
   AUDIT:      '/audit',
   MONITORING: '/monitoring',

@@ -17,7 +17,8 @@ const MFAPage             = lazy(() => import('@/features/auth/pages/MFAPage').t
 
 const DashboardPage       = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const CaseListPage        = lazy(() => import('@/features/cases/pages/CaseListPage').then((m) => ({ default: m.CaseListPage })))
-const CaseReviewPage      = lazy(() => import('@/features/review/CaseReviewPage').then((m) => ({ default: m.CaseReviewPage })))
+const CaseReviewPage             = lazy(() => import('@/features/review/CaseReviewPage').then((m) => ({ default: m.CaseReviewPage })))
+const DocumentIntelligencePage   = lazy(() => import('@/features/ingestion/DocumentIntelligencePage').then((m) => ({ default: m.DocumentIntelligencePage })))
 const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -121,6 +122,12 @@ export function AppRouter() {
             <Route
               path="/review/:caseId"
               element={<Page><CaseReviewPage /></Page>}
+            />
+
+            {/* Document intelligence */}
+            <Route
+              path={ROUTES.INGESTION}
+              element={<Page><DocumentIntelligencePage /></Page>}
             />
 
             {/* Analytics — reviewer + admin */}
