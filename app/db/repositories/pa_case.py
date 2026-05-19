@@ -96,9 +96,6 @@ class PACaseRepository(BaseRepository[PACase]):
                 selectinload(PACase.patient),
                 selectinload(PACase.provider),
                 selectinload(PACase.documents),
-                selectinload(PACase.entities),
-                selectinload(PACase.policy_matches),
-                selectinload(PACase.evaluations),
                 selectinload(PACase.clarifications),
                 selectinload(PACase.reviewer_actions),
                 selectinload(PACase.decision),
@@ -132,6 +129,7 @@ class PACaseRepository(BaseRepository[PACase]):
         priorities: list[CasePriority] | None = None,
         skip: int = 0,
         limit: int = 25,
+        all_statuses: bool = False,
     ) -> list[PACase]:
         """
         Fetch cases ready for reviewer action.
@@ -140,24 +138,20 @@ class PACaseRepository(BaseRepository[PACase]):
         then by submitted_at ASC (oldest first — FIFO within priority).
 
         Args:
-            reviewer_id: Filter to a specific reviewer's assigned cases
-            statuses:    Override default status filter
-            priorities:  Filter to specific priority levels
+            reviewer_id:  Filter to a specific reviewer's assigned cases
+            statuses:     Override default status filter
+            priorities:   Filter to specific priority levels
+            all_statuses: If True, skip the default UNDER_REVIEW/ESCALATED filter
         """
-        if statuses is None:
+        if statuses is None and not all_statuses:
             statuses = [CaseStatus.UNDER_REVIEW, CaseStatus.ESCALATED]
-
-        priority_order = {
-            CasePriority.EMERGENT: 1,
-            CasePriority.URGENT: 2,
-            CasePriority.ROUTINE: 3,
-        }
 
         stmt = (
             select(PACase)
-            .where(
-                PACase.deleted_at.is_(None),
-                PACase.status.in_(statuses),
+            .where(PACase.deleted_at.is_(None))
+            .options(
+                selectinload(PACase.patient),
+                selectinload(PACase.provider),
             )
             .order_by(
                 # Custom priority sort — EMERGENT first
@@ -168,6 +162,8 @@ class PACaseRepository(BaseRepository[PACase]):
             .limit(limit)
         )
 
+        if statuses:
+            stmt = stmt.where(PACase.status.in_(statuses))
         if reviewer_id:
             stmt = stmt.where(PACase.assigned_reviewer_id == reviewer_id)
         if priorities:

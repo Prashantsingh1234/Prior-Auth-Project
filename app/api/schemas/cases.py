@@ -333,12 +333,8 @@ class CaseDetailResponse(BaseSchema):
             patient=PatientSchema.from_orm(case.patient),
             provider=ProviderSchema.from_orm(case.provider),
             documents=[DocumentSchema.from_orm(d) for d in (case.documents or [])],
-            extracted_entities=[
-                ExtractedEntitySchema.from_orm(e) for e in (case.entities or [])
-            ],
-            policy_criteria=[
-                PolicyCriterionSchema.from_orm(ev) for ev in (case.evaluations or [])
-            ],
+            extracted_entities=[],
+            policy_criteria=[],
             decision=CaseDecisionSchema.from_orm(case.decision) if case.decision else None,
             clarifications=[
                 ClarificationSchema.from_orm(cl) for cl in (case.clarifications or [])

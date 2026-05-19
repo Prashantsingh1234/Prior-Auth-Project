@@ -1,235 +1,121 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Link } from 'react-router-dom'
-import { Eye, EyeOff, Lock, AlertCircle, ChevronRight, Stethoscope } from 'lucide-react'
-import { AuthLayout } from './components/AuthLayout'
-import { useLogin } from './hooks/useLogin'
-import { useRateLimit } from '@/hooks/useRateLimit'
-import { cn } from '@/lib/utils'
-import { ROUTES } from '@/config/routes.config'
-
-const schema = z.object({
-  email:      z.string().trim().email('Enter a valid email address').max(254),
-  password:   z.string().min(1, 'Password is required').max(128),
-  rememberMe: z.boolean().optional(),
-})
-type FormData = z.infer<typeof schema>
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuthStore } from '@/store'
+import { authService } from '@/services/auth.service'
+import { Shield } from 'lucide-react'
 
 const DEMO_ACCOUNTS = [
-  {
-    role:     'Admin',
-    email:    'admin@healthcare.internal',
-    name:     'Alex Carter',
-    color:    'from-purple-500/20 to-violet-500/20',
-    border:   'border-purple-500/20',
-    textColor:'text-purple-400',
-  },
-  {
-    role:     'Reviewer',
-    email:    'reviewer@healthcare.internal',
-    name:     'Dr. Sarah Chen',
-    color:    'from-cyan-500/20 to-blue-500/20',
-    border:   'border-cyan-500/20',
-    textColor:'text-cyan-400',
-  },
-  {
-    role:     'Provider',
-    email:    'provider@healthcare.internal',
-    name:     'Dr. James Miller',
-    color:    'from-emerald-500/20 to-teal-500/20',
-    border:   'border-emerald-500/20',
-    textColor:'text-emerald-400',
-  },
+  { role: 'Provider', email: 'provider@pa-review.com', password: 'Provider@secure123!' },
+  { role: 'Reviewer', email: 'reviewer@pa-review.com', password: 'Review@secure123!' },
+  { role: 'Admin',    email: 'admin@pa-review.com',    password: 'Admin@secure123!' },
 ]
 
-export function LoginPage() {
-  const [showPw, setShowPw]       = useState(false)
-  const [apiError, setApiError]   = useState<string | null>(null)
-  const { mutate: login, isPending } = useLogin()
+function roleHome(role?: string) {
+  if (role === 'reviewer') return '/reviewer/dashboard'
+  if (role === 'admin')    return '/admin/dashboard'
+  return '/provider/dashboard'
+}
 
-  // 5 attempts per 15 minutes — matches typical HIPAA brute-force policy
-  const { isLimited, attempt, cooldownMs } = useRateLimit(5, 15 * 60_000)
+export default function LoginPage() {
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { rememberMe: false },
-  })
-  const email = watch('email')
+  const setAuth  = useAuthStore((s) => s.setAuth)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as any)?.from?.pathname ?? null
 
-  const onSubmit = (data: FormData) => {
-    if (!attempt()) {
-      const remaining = Math.ceil(cooldownMs() / 60_000)
-      setApiError(`Too many sign-in attempts. Please wait ${remaining} minute${remaining !== 1 ? 's' : ''} before trying again.`)
-      return
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await authService.login({ email, password })
+      setAuth(res.user, res.tokens)
+      navigate(from ?? roleHome(res.user.role), { replace: true })
+    } catch {
+      setError('Invalid email or password.')
+    } finally {
+      setLoading(false)
     }
-    setApiError(null)
-    login(
-      { email: data.email, password: data.password, rememberMe: data.rememberMe },
-      { onError: (e: any) => setApiError(e?.message ?? 'Invalid email or password') }
-    )
   }
 
   return (
-    <AuthLayout>
-      {/* Mobile logo */}
-      <div className="flex items-center gap-3 mb-8 lg:hidden">
-        <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
-          <Stethoscope className="w-4.5 h-4.5 text-cyan-400" />
-        </div>
-        <p className="text-[var(--text-1)] font-semibold">PA Review Platform</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
 
-      {/* Heading */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-1)]">Welcome back</h1>
-        <p className="text-[var(--text-3)] text-sm mt-1">Sign in to your clinical account</p>
-      </div>
-
-      {/* Demo quick-access */}
-      <div className="grid grid-cols-3 gap-2 mb-6">
-        {DEMO_ACCOUNTS.map((a) => (
-          <motion.button
-            key={a.role}
-            type="button"
-            whileHover={{ scale: 1.02, y: -1 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => { setValue('email', a.email); setValue('password', 'demo') }}
-            className={cn(
-              'flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all',
-              `bg-gradient-to-br ${a.color} ${a.border}`,
-              email === a.email && 'ring-1 ring-cyan-500/40',
-            )}
-          >
-            <span className={cn('text-xs font-semibold', a.textColor)}>{a.role}</span>
-            <span className="text-[10px] text-[var(--text-4)] mt-0.5 truncate w-full">{a.name}</span>
-          </motion.button>
-        ))}
-      </div>
-
-      <div className="relative mb-5">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[var(--border)]" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-3 bg-[var(--bg)] text-[var(--text-4)]">or enter credentials</span>
-        </div>
-      </div>
-
-      {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-        {/* API error */}
-        <AnimatePresence>
-          {apiError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm overflow-hidden"
-            >
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{apiError}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Email */}
-        <div>
-          <label className="section-label mb-1 block">Email address</label>
-          <input
-            {...register('email')}
-            type="email"
-            autoComplete="email"
-            placeholder="clinician@hospital.org"
-            className={cn('input w-full', errors.email && 'border-red-500/50 focus:border-red-500')}
-          />
-          {errors.email && (
-            <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>
-          )}
-        </div>
-
-        {/* Password */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="section-label">Password</label>
-            <Link
-              to={ROUTES.FORGOT_PASSWORD}
-              className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-            >
-              Forgot password?
-            </Link>
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 mb-4">
+            <Shield className="w-6 h-6 text-white" />
           </div>
-          <div className="relative">
-            <input
-              {...register('password')}
-              type={showPw ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              className={cn('input w-full pr-10', errors.password && 'border-red-500/50 focus:border-red-500')}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
-              aria-label={showPw ? 'Hide password' : 'Show password'}
-            >
-              {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {errors.password && (
-            <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>
-          )}
+          <h1 className="text-xl font-semibold text-gray-900">PA Review Platform</h1>
+          <p className="mt-1 text-sm text-gray-500">Sign in to your account</p>
         </div>
 
-        {/* Remember me */}
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <div className="relative">
-            <input {...register('rememberMe')} type="checkbox" className="sr-only peer" />
-            <div className="w-4 h-4 rounded border border-[var(--border)] peer-checked:bg-cyan-500 peer-checked:border-cyan-500 transition-all flex items-center justify-center">
-              <svg className="hidden peer-checked:block w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 12 12">
-                <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
+        {/* Form */}
+        <div className="card p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                placeholder="you@example.com"
+                required
+                autoFocus
+              />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                {error}
+              </p>
+            )}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        </div>
+
+        {/* Demo accounts */}
+        <div className="mt-4">
+          <p className="text-xs text-gray-400 text-center mb-2">Demo accounts</p>
+          <div className="flex gap-2">
+            {DEMO_ACCOUNTS.map((a) => (
+              <button
+                key={a.role}
+                type="button"
+                onClick={() => { setEmail(a.email); setPassword(a.password) }}
+                className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-md bg-white hover:bg-gray-50 text-gray-600 transition-colors"
+              >
+                {a.role}
+              </button>
+            ))}
           </div>
-          <span className="text-sm text-[var(--text-2)]">Keep me signed in for 30 days</span>
-        </label>
+        </div>
 
-        {/* Submit */}
-        <motion.button
-          type="submit"
-          disabled={isPending || isLimited}
-          whileHover={!isPending && !isLimited ? { scale: 1.01 } : {}}
-          whileTap={!isPending && !isLimited ? { scale: 0.98 } : {}}
-          className={cn(
-            'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white',
-            'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500',
-            'shadow-[0_0_20px_rgba(14,165,233,0.25)] hover:shadow-[0_0_28px_rgba(14,165,233,0.4)]',
-            'transition-all disabled:opacity-60 disabled:cursor-not-allowed',
-          )}
-        >
-          {isPending ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Authenticating…
-            </>
-          ) : (
-            <>
-              <Lock className="w-4 h-4" />
-              Sign in securely
-              <ChevronRight className="w-4 h-4 ml-auto opacity-60" />
-            </>
-          )}
-        </motion.button>
-      </form>
-
-      {/* Footer */}
-      <p className="text-center text-xs text-[var(--text-4)] mt-6 leading-relaxed">
-        By signing in you acknowledge this system contains{' '}
-        <span className="text-[var(--text-3)]">Protected Health Information (PHI)</span>{' '}
-        and agree to maintain confidentiality per HIPAA.
-      </p>
-    </AuthLayout>
+        <p className="mt-6 text-center text-xs text-gray-400">
+          HIPAA Compliant · All activity is logged
+        </p>
+      </div>
+    </div>
   )
 }

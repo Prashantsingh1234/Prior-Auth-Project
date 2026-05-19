@@ -21,75 +21,80 @@ depends_on: str | None = None
 def upgrade() -> None:
     """Create all 12 tables for the PA Review Platform."""
 
-    # ----------------------------------------------------------
-    # 1. patients
-    # ----------------------------------------------------------
-    op.create_table(
-        "patients",
-        sa.Column("id", mysql.CHAR(36), primary_key=True),
-        sa.Column("first_name", sa.String(100), nullable=False),
-        sa.Column("last_name", sa.String(100), nullable=False),
-        sa.Column("date_of_birth", sa.Date, nullable=True),
-        sa.Column("gender", sa.String(20), nullable=True),
-        sa.Column("member_id", sa.String(100), nullable=False),
-        sa.Column("group_number", sa.String(100), nullable=True),
-        sa.Column("insurance_plan_id", sa.String(100), nullable=True),
-        sa.Column("insurance_plan_name", sa.String(255), nullable=True),
-        sa.Column("insurance_plan_type", sa.String(50), nullable=True),
-        sa.Column("phone", sa.String(20), nullable=True),
-        sa.Column("email", sa.String(255), nullable=True),
-        sa.Column("address_line1", sa.String(255), nullable=True),
-        sa.Column("address_line2", sa.String(255), nullable=True),
-        sa.Column("city", sa.String(100), nullable=True),
-        sa.Column("state", sa.String(50), nullable=True),
-        sa.Column("zip_code", sa.String(20), nullable=True),
-        sa.Column("country", sa.String(3), nullable=False, server_default="USA"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint("member_id", "insurance_plan_id", name="uq_patients_member_plan"),
-        mysql_charset="utf8mb4",
-        mysql_collate="utf8mb4_unicode_ci",
-    )
-    op.create_index("ix_patients_member_id", "patients", ["member_id"])
-    op.create_index("ix_patients_last_name", "patients", ["last_name"])
-    op.create_index("ix_patients_dob", "patients", ["date_of_birth"])
-    op.create_index("ix_patients_deleted_at", "patients", ["deleted_at"])
+    conn = op.get_bind()
+    existing = set(sa.inspect(conn).get_table_names())
 
     # ----------------------------------------------------------
-    # 2. providers
+    # 1. patients  (may already exist from init.sql)
     # ----------------------------------------------------------
-    op.create_table(
-        "providers",
-        sa.Column("id", mysql.CHAR(36), primary_key=True),
-        sa.Column("npi", sa.String(10), nullable=False),
-        sa.Column("provider_type", sa.Enum("INDIVIDUAL", "ORGANIZATION"), nullable=False, server_default="INDIVIDUAL"),
-        sa.Column("tax_id", sa.String(20), nullable=True),
-        sa.Column("first_name", sa.String(100), nullable=True),
-        sa.Column("last_name", sa.String(100), nullable=True),
-        sa.Column("credentials", sa.String(100), nullable=True),
-        sa.Column("specialty", sa.String(255), nullable=True),
-        sa.Column("organization_name", sa.String(255), nullable=True),
-        sa.Column("department", sa.String(255), nullable=True),
-        sa.Column("phone", sa.String(20), nullable=True),
-        sa.Column("fax", sa.String(20), nullable=True),
-        sa.Column("email", sa.String(255), nullable=True),
-        sa.Column("address_line1", sa.String(255), nullable=True),
-        sa.Column("address_line2", sa.String(255), nullable=True),
-        sa.Column("city", sa.String(100), nullable=True),
-        sa.Column("state", sa.String(50), nullable=True),
-        sa.Column("zip_code", sa.String(20), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint("npi", name="uq_providers_npi"),
-        mysql_charset="utf8mb4",
-        mysql_collate="utf8mb4_unicode_ci",
-    )
-    op.create_index("ix_providers_npi", "providers", ["npi"])
-    op.create_index("ix_providers_last_name", "providers", ["last_name"])
-    op.create_index("ix_providers_organization", "providers", ["organization_name"])
-    op.create_index("ix_providers_deleted_at", "providers", ["deleted_at"])
+    if "patients" not in existing:
+        op.create_table(
+            "patients",
+            sa.Column("id", mysql.CHAR(36), primary_key=True),
+            sa.Column("first_name", sa.String(100), nullable=False),
+            sa.Column("last_name", sa.String(100), nullable=False),
+            sa.Column("date_of_birth", sa.Date, nullable=True),
+            sa.Column("gender", sa.String(20), nullable=True),
+            sa.Column("member_id", sa.String(100), nullable=False),
+            sa.Column("group_number", sa.String(100), nullable=True),
+            sa.Column("insurance_plan_id", sa.String(100), nullable=True),
+            sa.Column("insurance_plan_name", sa.String(255), nullable=True),
+            sa.Column("insurance_plan_type", sa.String(50), nullable=True),
+            sa.Column("phone", sa.String(20), nullable=True),
+            sa.Column("email", sa.String(255), nullable=True),
+            sa.Column("address_line1", sa.String(255), nullable=True),
+            sa.Column("address_line2", sa.String(255), nullable=True),
+            sa.Column("city", sa.String(100), nullable=True),
+            sa.Column("state", sa.String(50), nullable=True),
+            sa.Column("zip_code", sa.String(20), nullable=True),
+            sa.Column("country", sa.String(3), nullable=False, server_default="USA"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.UniqueConstraint("member_id", "insurance_plan_id", name="uq_patients_member_plan"),
+            mysql_charset="utf8mb4",
+            mysql_collate="utf8mb4_unicode_ci",
+        )
+        op.create_index("ix_patients_member_id", "patients", ["member_id"])
+        op.create_index("ix_patients_last_name", "patients", ["last_name"])
+        op.create_index("ix_patients_dob", "patients", ["date_of_birth"])
+        op.create_index("ix_patients_deleted_at", "patients", ["deleted_at"])
+
+    # ----------------------------------------------------------
+    # 2. providers  (may already exist from init.sql)
+    # ----------------------------------------------------------
+    if "providers" not in existing:
+        op.create_table(
+            "providers",
+            sa.Column("id", mysql.CHAR(36), primary_key=True),
+            sa.Column("npi", sa.String(10), nullable=False),
+            sa.Column("provider_type", sa.Enum("INDIVIDUAL", "ORGANIZATION"), nullable=False, server_default="INDIVIDUAL"),
+            sa.Column("tax_id", sa.String(20), nullable=True),
+            sa.Column("first_name", sa.String(100), nullable=True),
+            sa.Column("last_name", sa.String(100), nullable=True),
+            sa.Column("credentials", sa.String(100), nullable=True),
+            sa.Column("specialty", sa.String(255), nullable=True),
+            sa.Column("organization_name", sa.String(255), nullable=True),
+            sa.Column("department", sa.String(255), nullable=True),
+            sa.Column("phone", sa.String(20), nullable=True),
+            sa.Column("fax", sa.String(20), nullable=True),
+            sa.Column("email", sa.String(255), nullable=True),
+            sa.Column("address_line1", sa.String(255), nullable=True),
+            sa.Column("address_line2", sa.String(255), nullable=True),
+            sa.Column("city", sa.String(100), nullable=True),
+            sa.Column("state", sa.String(50), nullable=True),
+            sa.Column("zip_code", sa.String(20), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.UniqueConstraint("npi", name="uq_providers_npi"),
+            mysql_charset="utf8mb4",
+            mysql_collate="utf8mb4_unicode_ci",
+        )
+        op.create_index("ix_providers_npi", "providers", ["npi"])
+        op.create_index("ix_providers_last_name", "providers", ["last_name"])
+        op.create_index("ix_providers_organization", "providers", ["organization_name"])
+        op.create_index("ix_providers_deleted_at", "providers", ["deleted_at"])
 
     # ----------------------------------------------------------
     # 3. pa_cases
@@ -111,8 +116,8 @@ def upgrade() -> None:
             "PROCEDURE","SPECIALTY_REFERRAL","HOME_HEALTH","INPATIENT_ADMISSION",
             "OUTPATIENT_SURGERY","BEHAVIORAL_HEALTH","OTHER"
         ), nullable=True),
-        sa.Column("cpt_codes", sa.JSON, nullable=False, server_default="[]"),
-        sa.Column("icd_codes", sa.JSON, nullable=False, server_default="[]"),
+        sa.Column("cpt_codes", sa.JSON, nullable=False),
+        sa.Column("icd_codes", sa.JSON, nullable=False),
         sa.Column("requested_service_description", sa.Text, nullable=True),
         sa.Column("clinical_notes", sa.Text, nullable=True),
         sa.Column("ai_recommendation", sa.String(10), nullable=True),
@@ -199,7 +204,7 @@ def upgrade() -> None:
             "INSURANCE_INFO","OTHER"
         ), nullable=False),
         sa.Column("entity_key", sa.String(200), nullable=False),
-        sa.Column("entity_value", sa.JSON, nullable=False, server_default="{}"),
+        sa.Column("entity_value", sa.JSON, nullable=False),
         sa.Column("display_value", sa.String(500), nullable=True),
         sa.Column("extraction_method", sa.Enum("LLM","OCR","REGEX","MANUAL"), nullable=False, server_default="LLM"),
         sa.Column("confidence_score", sa.Float, nullable=True),
@@ -233,11 +238,11 @@ def upgrade() -> None:
         sa.Column("policy_name", sa.String(500), nullable=False),
         sa.Column("policy_version", sa.String(20), nullable=False, server_default="v1"),
         sa.Column("pinecone_namespace", sa.String(100), nullable=False),
-        sa.Column("matched_cpt_codes", sa.JSON, nullable=False, server_default="[]"),
-        sa.Column("matched_icd_codes", sa.JSON, nullable=False, server_default="[]"),
+        sa.Column("matched_cpt_codes", sa.JSON, nullable=False),
+        sa.Column("matched_icd_codes", sa.JSON, nullable=False),
         sa.Column("retrieval_score", sa.Float, nullable=True),
         sa.Column("chunk_count", sa.Integer, nullable=False, server_default="0"),
-        sa.Column("retrieved_chunks", sa.JSON, nullable=False, server_default="[]"),
+        sa.Column("retrieved_chunks", sa.JSON, nullable=False),
         sa.Column("retrieval_metadata", sa.JSON, nullable=True),
         sa.Column("rerank_score", sa.Float, nullable=True),
         sa.Column("is_primary_policy", sa.Boolean, nullable=False, server_default="1"),
@@ -266,7 +271,7 @@ def upgrade() -> None:
         sa.Column("policy_version", sa.String(20), nullable=True),
         sa.Column("criterion_status", sa.Enum("PASS","FAIL","INSUFFICIENT_EVIDENCE","NOT_APPLICABLE"), nullable=False),
         sa.Column("evidence", sa.Text, nullable=True),
-        sa.Column("evidence_sources", sa.JSON, nullable=False, server_default="[]"),
+        sa.Column("evidence_sources", sa.JSON, nullable=False),
         sa.Column("rationale", sa.Text, nullable=True),
         sa.Column("confidence_score", sa.Float, nullable=True),
         sa.Column("llm_model_used", sa.String(100), nullable=True),
@@ -299,8 +304,8 @@ def upgrade() -> None:
         sa.Column("case_id", mysql.CHAR(36), sa.ForeignKey("pa_cases.id", ondelete="CASCADE"), nullable=False),
         sa.Column("attempt_number", sa.Integer, nullable=False),
         sa.Column("status", sa.Enum("PENDING","ANSWERED","TIMEOUT","ESCALATED"), nullable=False, server_default="PENDING"),
-        sa.Column("missing_criteria", sa.JSON, nullable=False, server_default="[]"),
-        sa.Column("questions", sa.JSON, nullable=False, server_default="[]"),
+        sa.Column("missing_criteria", sa.JSON, nullable=False),
+        sa.Column("questions", sa.JSON, nullable=False),
         sa.Column("answers", sa.JSON, nullable=True),
         sa.Column("clarification_context", sa.JSON, nullable=True),
         sa.Column("resolution_summary", sa.Text, nullable=True),
@@ -402,7 +407,7 @@ def upgrade() -> None:
     op.create_index("ix_decisions_reviewer_id", "decisions", ["reviewer_id"])
 
     # ----------------------------------------------------------
-    # 11. audit_logs
+    # 11. audit_logs  (full schema matching the ORM model)
     # ----------------------------------------------------------
     op.create_table(
         "audit_logs",
@@ -431,6 +436,20 @@ def upgrade() -> None:
         sa.Column("api_endpoint", sa.String(500), nullable=True),
         sa.Column("case_id", mysql.CHAR(36), nullable=True),
         sa.Column("audit_metadata", sa.JSON, nullable=True),
+        # Extended structured-audit columns
+        sa.Column("audit_category", sa.String(50), nullable=True),
+        sa.Column("audit_severity", sa.String(20), nullable=True),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("duration_ms", sa.Float, nullable=True),
+        sa.Column("session_id", sa.String(128), nullable=True),
+        sa.Column("document_id", mysql.CHAR(36), nullable=True),
+        sa.Column("policy_id", mysql.CHAR(36), nullable=True),
+        sa.Column("attempt_id", mysql.CHAR(36), nullable=True),
+        sa.Column("event_data", sa.JSON, nullable=True),
+        sa.Column("error_type", sa.String(120), nullable=True),
+        sa.Column("error_message", sa.Text, nullable=True),
+        sa.Column("error_hash", sa.String(16), nullable=True),
+        sa.Column("content_hash", sa.String(64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         mysql_charset="utf8mb4",
@@ -444,6 +463,9 @@ def upgrade() -> None:
     op.create_index("ix_audit_created_at", "audit_logs", ["created_at"])
     op.create_index("ix_audit_request_id", "audit_logs", ["request_id"])
     op.create_index("ix_audit_entity_lookup", "audit_logs", ["entity_type", "entity_id", "created_at"])
+    op.create_index("ix_audit_category_occurred", "audit_logs", ["audit_category", "occurred_at"])
+    op.create_index("ix_audit_error_hash", "audit_logs", ["error_hash"])
+    op.create_index("ix_audit_document_id", "audit_logs", ["document_id"])
 
     # ----------------------------------------------------------
     # 12. metrics

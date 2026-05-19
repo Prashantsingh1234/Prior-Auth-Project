@@ -1,1 +1,0 @@
-﻿export { AIBadge } from './AIBadge'

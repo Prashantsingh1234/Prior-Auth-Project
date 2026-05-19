@@ -42,6 +42,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         settings = get_settings()
         self._is_production = settings.is_production
+        self._api_prefix = settings.api_prefix or ""
+        self._docs_enabled = settings.docs_enabled
 
         # Pre-compute static headers dict to avoid repeated dict construction
         self._headers: dict[str, str] = {
@@ -69,17 +71,45 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "max-age=31536000; includeSubDomains; preload"
             )
 
+        # CSP for Swagger/ReDoc when enabled. Kept scoped to docs endpoints only.
+        self._docs_csp = (
+            "default-src 'self'; "
+            "img-src 'self' data: https://fastapi.tiangolo.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://cdn.jsdelivr.net; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
+
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         response = await call_next(request)
 
+        # Relax CSP ONLY for documentation routes so Swagger UI can load its assets.
+        if self._docs_enabled:
+            path = request.url.path
+            docs_paths = {
+                "/docs",
+                "/redoc",
+                "/openapi.json",
+                f"{self._api_prefix}/docs",
+                f"{self._api_prefix}/redoc",
+                f"{self._api_prefix}/openapi.json",
+            }
+            if path in docs_paths:
+                response.headers["Content-Security-Policy"] = self._docs_csp
+
         # Inject all security headers
         for header_name, header_value in self._headers.items():
+            if header_name == "Content-Security-Policy" and "Content-Security-Policy" in response.headers:
+                continue
             response.headers[header_name] = header_value
 
         # Remove headers that leak server implementation details
-        response.headers.pop("Server", None)
-        response.headers.pop("X-Powered-By", None)
+        for h in ("Server", "X-Powered-By"):
+            if h in response.headers:
+                del response.headers[h]
 
         return response

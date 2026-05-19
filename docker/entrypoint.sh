@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # docker/entrypoint.sh — Container entrypoint
 # Runs DB migrations then starts Gunicorn (production) or Uvicorn (development).
 set -euo pipefail

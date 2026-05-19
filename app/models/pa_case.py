@@ -36,10 +36,7 @@ if TYPE_CHECKING:
     from app.models.clarification import Clarification
     from app.models.decision import Decision
     from app.models.document import UploadedDocument
-    from app.models.entity import ExtractedEntity
-    from app.models.evaluation import Evaluation
     from app.models.patient import Patient
-    from app.models.policy_match import PolicyMatch
     from app.models.provider import Provider
     from app.models.reviewer_action import ReviewerAction
 
@@ -182,18 +179,6 @@ class PACase(BaseModel):
     )
     documents: Mapped[list["UploadedDocument"]] = relationship(
         "UploadedDocument", back_populates="case", lazy="raise",
-        cascade="all, delete-orphan",
-    )
-    entities: Mapped[list["ExtractedEntity"]] = relationship(
-        "ExtractedEntity", back_populates="case", lazy="raise",
-        cascade="all, delete-orphan",
-    )
-    policy_matches: Mapped[list["PolicyMatch"]] = relationship(
-        "PolicyMatch", back_populates="case", lazy="raise",
-        cascade="all, delete-orphan",
-    )
-    evaluations: Mapped[list["Evaluation"]] = relationship(
-        "Evaluation", back_populates="case", lazy="raise",
         cascade="all, delete-orphan",
     )
     clarifications: Mapped[list["Clarification"]] = relationship(

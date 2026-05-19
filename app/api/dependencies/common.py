@@ -94,7 +94,32 @@ async def get_current_user(
     return payload
 
 
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> TokenPayload | None:
+    """
+    Best-effort user extraction.
+
+    Returns None when no/invalid token is provided (no 401 raised).
+    Useful for endpoints that can be called anonymously in dev/demo flows.
+    """
+    if credentials is None:
+        return None
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except (TokenExpiredError, TokenInvalidError):
+        return None
+
+    structlog.contextvars.bind_contextvars(
+        user_id=payload.sub,
+        user_role=payload.role,
+    )
+    return payload
+
+
 CurrentUser = Annotated[TokenPayload, Depends(get_current_user)]
+OptionalCurrentUser = Annotated[TokenPayload | None, Depends(get_current_user_optional)]
 
 
 def require_role(*allowed_roles: str):

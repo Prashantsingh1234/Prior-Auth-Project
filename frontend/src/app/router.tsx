@@ -1,229 +1,110 @@
-import { lazy } from 'react'
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { ROUTES, ROLE_HOME } from '@/config/routes.config'
 import { useAuthStore } from '@/store'
-import { usePermissions } from '@/hooks'
-import { tokenVault } from '@/lib/tokenVault'
-import { SuspenseBoundary } from '@/components/layout/SuspenseBoundary'
-import { ErrorBoundary }    from '@/components/layout/ErrorBoundary'
-import { AppShell }         from '@/components/layout/AppShell'
-import type { UserRole, Permission } from '@/types'
+import AppLayout from '@/components/layout/AppLayout'
 
-// ─── Lazy page imports ────────────────────────────────────────────────────────
+// ─── Lazy pages ───────────────────────────────────────────────────────────────
 
-const LoginPage           = lazy(() => import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
-const ForgotPasswordPage  = lazy(() => import('@/features/auth/pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })))
-const OTPVerificationPage = lazy(() => import('@/features/auth/pages/OTPVerificationPage').then((m) => ({ default: m.OTPVerificationPage })))
-const MFAPage             = lazy(() => import('@/features/auth/pages/MFAPage').then((m) => ({ default: m.MFAPage })))
+const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 
-const DashboardPage       = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
-const CaseListPage        = lazy(() => import('@/features/cases/pages/CaseListPage').then((m) => ({ default: m.CaseListPage })))
-const CaseReviewPage             = lazy(() => import('@/features/review/CaseReviewPage').then((m) => ({ default: m.CaseReviewPage })))
-const DocumentIntelligencePage   = lazy(() => import('@/features/ingestion/DocumentIntelligencePage').then((m) => ({ default: m.DocumentIntelligencePage })))
-const ReasoningPage              = lazy(() => import('@/features/reasoning/ReasoningPage').then((m) => ({ default: m.ReasoningPage })))
-const ClarificationPage          = lazy(() => import('@/features/clarifications/ClarificationPage').then((m) => ({ default: m.ClarificationPage })))
-const ReviewerWorkflowPage       = lazy(() => import('@/features/workflow/ReviewerWorkflowPage').then((m) => ({ default: m.ReviewerWorkflowPage })))
-const MonitoringPage             = lazy(() => import('@/features/monitoring/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
-const PoliciesPage               = lazy(() => import('@/features/policies/PoliciesPage').then((m) => ({ default: m.PoliciesPage })))
-const AuditLogPage               = lazy(() => import('@/features/audit/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
-const RealtimePage               = lazy(() => import('@/features/realtime/RealtimePage').then((m) => ({ default: m.RealtimePage })))
-const TablesPage                 = lazy(() => import('@/features/tables/TablesPage').then((m) => ({ default: m.TablesPage })))
-const AnalyticsDashboard  = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
+// Provider
+const ProviderDashboard      = lazy(() => import('@/features/provider/ProviderDashboard'))
+const SubmitRequestPage      = lazy(() => import('@/features/provider/SubmitRequestPage'))
+const MyCasesPage            = lazy(() => import('@/features/provider/MyCasesPage'))
+const ProviderClarifications = lazy(() => import('@/features/provider/ClarificationsPage'))
+
+// Reviewer
+const ReviewerDashboard      = lazy(() => import('@/features/reviewer/ReviewerDashboard'))
+const CaseQueuePage          = lazy(() => import('@/features/reviewer/CaseQueuePage'))
+const CaseReviewPage         = lazy(() => import('@/features/reviewer/CaseReviewPage'))
+const ReviewerClarifications = lazy(() => import('@/features/reviewer/ClarificationsPage'))
+
+// Admin
+const AdminDashboard         = lazy(() => import('@/features/admin/AdminDashboard'))
+const UserManagementPage     = lazy(() => import('@/features/admin/UserManagementPage'))
+const PolicyManagementPage   = lazy(() => import('@/features/admin/PolicyManagementPage'))
+
+// ─── Loading fallback ─────────────────────────────────────────────────────────
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64 text-sm text-gray-400">
+      Loading…
+    </div>
+  )
+}
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 function RequireAuth() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const isHydrated      = useAuthStore((s) => s.isHydrated)
-  const location        = useLocation()
-
-  if (!isHydrated) return null
-
+  const location = useLocation()
   if (!isAuthenticated) {
-    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
-
-  // If the Zustand state says "authenticated" but both vault slots are empty,
-  // the session has truly ended (page refresh in a new tab, or sessionStorage cleared).
-  // Redirect proactively rather than waiting for the first 401.
-  if (!tokenVault.hasSession()) {
-    return <Navigate to={`${ROUTES.LOGIN}?reason=session_ended`} state={{ from: location }} replace />
-  }
-
   return <Outlet />
 }
 
 function RequireGuest() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const isHydrated      = useAuthStore((s) => s.isHydrated)
-  const role            = useAuthStore((s) => s.user?.role)
-
-  if (!isHydrated) return null
-
-  return isAuthenticated
-    ? <Navigate to={ROLE_HOME[role as UserRole] ?? ROUTES.DASHBOARD} replace />
-    : <Outlet />
+  const role = useAuthStore((s) => s.user?.role)
+  if (isAuthenticated) {
+    return <Navigate to={roleHome(role)} replace />
+  }
+  return <Outlet />
 }
 
-function RequirePermission({ permission }: { permission: Permission }) {
-  const { can } = usePermissions()
-  return can(permission) ? <Outlet /> : <Navigate to={ROUTES.DASHBOARD} replace />
+function roleHome(role?: string) {
+  if (role === 'reviewer') return '/reviewer/dashboard'
+  if (role === 'admin')    return '/admin/dashboard'
+  return '/provider/dashboard'
 }
-
-function RequireRole({ roles }: { roles: UserRole[] }) {
-  const hasAnyRole = useAuthStore((s) => s.hasAnyRole)
-  return hasAnyRole(roles) ? <Outlet /> : <Navigate to={ROUTES.DASHBOARD} replace />
-}
-
-function RequireMFAChallenge() {
-  const mfaChallenge = useAuthStore((s) => s.mfaChallenge)
-  return mfaChallenge ? <Outlet /> : <Navigate to={ROUTES.LOGIN} replace />
-}
-
-// ─── Role-based landing redirect ──────────────────────────────────────────────
 
 function RoleRedirect() {
   const role = useAuthStore((s) => s.user?.role)
-  return <Navigate to={ROLE_HOME[role as UserRole] ?? ROUTES.DASHBOARD} replace />
-}
-
-// ─── Lazy wrapper ─────────────────────────────────────────────────────────────
-
-function Page({ children }: { children: React.ReactNode }) {
-  return (
-    <ErrorBoundary>
-      <SuspenseBoundary>{children}</SuspenseBoundary>
-    </ErrorBoundary>
-  )
+  return <Navigate to={roleHome(role)} replace />
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export function AppRouter() {
   return (
-    <ErrorBoundary>
+    <Suspense fallback={<PageLoader />}>
       <Routes>
 
-        {/* ── Public / guest-only routes ──────────────────────────────────── */}
+        {/* Guest routes */}
         <Route element={<RequireGuest />}>
-          <Route path={ROUTES.LOGIN}           element={<Page><LoginPage /></Page>} />
-          <Route path={ROUTES.FORGOT_PASSWORD} element={<Page><ForgotPasswordPage /></Page>} />
-          <Route path={ROUTES.RESET_PASSWORD}  element={<Page><ForgotPasswordPage /></Page>} />
-          <Route path={ROUTES.OTP}             element={<Page><OTPVerificationPage /></Page>} />
+          <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* ── MFA flow (requires challenge token, not full auth) ────────── */}
-        <Route element={<RequireMFAChallenge />}>
-          <Route path={ROUTES.MFA} element={<Page><MFAPage /></Page>} />
-        </Route>
-
-        {/* ── Protected shell ───────────────────────────────────────────── */}
+        {/* Protected routes */}
         <Route element={<RequireAuth />}>
-          <Route element={<AppShell />}>
+          <Route element={<AppLayout />}>
 
-            {/* Root redirect based on role */}
             <Route index element={<RoleRedirect />} />
 
-            {/* Dashboard — all authenticated roles */}
-            <Route
-              path={ROUTES.DASHBOARD}
-              element={<Page><DashboardPage /></Page>}
-            />
+            {/* Provider */}
+            <Route path="/provider/dashboard"      element={<ProviderDashboard />} />
+            <Route path="/provider/submit"         element={<SubmitRequestPage />} />
+            <Route path="/provider/cases"          element={<MyCasesPage />} />
+            <Route path="/provider/clarifications" element={<ProviderClarifications />} />
 
-            {/* Cases list */}
-            <Route
-              path={ROUTES.CASES}
-              element={<Page><CaseListPage /></Page>}
-            />
+            {/* Reviewer */}
+            <Route path="/reviewer/dashboard"      element={<ReviewerDashboard />} />
+            <Route path="/reviewer/queue"          element={<CaseQueuePage />} />
+            <Route path="/reviewer/case/:caseId"   element={<CaseReviewPage />} />
+            <Route path="/reviewer/clarifications" element={<ReviewerClarifications />} />
 
-            {/* Case review — full 3-panel workspace */}
-            <Route
-              path="/review/:caseId"
-              element={<Page><CaseReviewPage /></Page>}
-            />
-
-            {/* Policy management */}
-            <Route
-              path={ROUTES.POLICIES}
-              element={<Page><PoliciesPage /></Page>}
-            />
-
-            {/* Document intelligence */}
-            <Route
-              path={ROUTES.INGESTION}
-              element={<Page><DocumentIntelligencePage /></Page>}
-            />
-
-            {/* AI Reasoning visualization */}
-            <Route
-              path={ROUTES.REASONING}
-              element={<Page><ReasoningPage /></Page>}
-            />
-
-            {/* Clarification management */}
-            <Route
-              path={ROUTES.CLARIFICATIONS}
-              element={<Page><ClarificationPage /></Page>}
-            />
-
-            {/* Reviewer workflow — mission control */}
-            <Route
-              path={ROUTES.WORKFLOW}
-              element={<Page><ReviewerWorkflowPage /></Page>}
-            />
-
-            {/* AI Monitoring dashboard */}
-            <Route
-              path={ROUTES.MONITORING}
-              element={<Page><MonitoringPage /></Page>}
-            />
-
-            {/* Analytics — reviewer + admin */}
-            <Route element={<RequirePermission permission="analytics:read" />}>
-              <Route
-                path={ROUTES.ANALYTICS}
-                element={<Page><AnalyticsDashboard /></Page>}
-              />
-            </Route>
-
-            {/* Admin-only routes */}
-            <Route element={<RequireRole roles={['admin']} />}>
-              <Route
-                path={ROUTES.USERS}
-                element={<Page><div className="p-8 text-[var(--text-1)]">User Management</div></Page>}
-              />
-              <Route
-                path={ROUTES.SETTINGS}
-                element={<Page><div className="p-8 text-[var(--text-1)]">Settings</div></Page>}
-              />
-            </Route>
-
-            {/* Real-time architecture */}
-            <Route
-              path="/realtime"
-              element={<Page><RealtimePage /></Page>}
-            />
-
-            {/* Enterprise tables */}
-            <Route
-              path="/tables"
-              element={<Page><TablesPage /></Page>}
-            />
-
-            {/* Audit — reviewer + admin */}
-            <Route element={<RequirePermission permission="audit:read" />}>
-              <Route
-                path={ROUTES.AUDIT}
-                element={<Page><AuditLogPage /></Page>}
-              />
-            </Route>
+            {/* Admin */}
+            <Route path="/admin/dashboard"  element={<AdminDashboard />} />
+            <Route path="/admin/users"      element={<UserManagementPage />} />
+            <Route path="/admin/policies"   element={<PolicyManagementPage />} />
 
           </Route>
         </Route>
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </ErrorBoundary>
+    </Suspense>
   )
 }

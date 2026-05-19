@@ -22,8 +22,11 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // Use IPv4 explicitly to avoid Windows/Node IPv6 localhost resolution issues (ECONNREFUSED ::1).
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+        timeout: 120_000,
+        proxyTimeout: 120_000,
       },
     },
   },

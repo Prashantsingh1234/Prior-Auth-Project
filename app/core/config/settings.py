@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0")
     environment: str = Field(default="development", description="development | staging | production")
     debug: bool = Field(default=False)
+    docs_enabled_override: bool | None = Field(
+        default=None,
+        description="Override Swagger/ReDoc enablement (default: enabled outside production)",
+    )
 
     # ----------------------------------------------------------
     # API
@@ -59,6 +63,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30)
     refresh_token_expire_days: int = Field(default=7)
+
+    # ----------------------------------------------------------
+    # Storage (local filesystem default)
+    # ----------------------------------------------------------
+    storage_root: str = Field(default="storage", description="Root directory for uploaded files")
 
     # ----------------------------------------------------------
     # CORS
@@ -101,9 +110,23 @@ class Settings(BaseSettings):
     # ----------------------------------------------------------
     openai_api_key: SecretStr | None = Field(default=None)
     openai_model: str = Field(default="gpt-4o")
+    openai_embedding_model: str = Field(default="text-embedding-3-small")
     openai_max_tokens: int = Field(default=4096)
     openai_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     openai_request_timeout: int = Field(default=60)
+
+    # ----------------------------------------------------------
+    # Azure OpenAI
+    # ----------------------------------------------------------
+    azure_openai_api_key: SecretStr | None = Field(default=None)
+    azure_openai_endpoint: str | None = Field(default=None)
+    azure_openai_deployment: str | None = Field(default=None)
+    azure_openai_model: str | None = Field(default=None)
+    azure_openai_api_version: str = Field(default="2024-02-01")
+    azure_openai_embedding_deployment: str | None = Field(
+        default=None,
+        description="Azure OpenAI embedding deployment name (e.g. text-embedding-3-small)",
+    )
 
     # ----------------------------------------------------------
     # Azure AI Document Intelligence (Primary OCR)
@@ -251,6 +274,8 @@ class Settings(BaseSettings):
     @property
     def docs_enabled(self) -> bool:
         """Swagger UI only available outside production."""
+        if self.docs_enabled_override is not None:
+            return bool(self.docs_enabled_override)
         return not self.is_production
 
     def safe_dict(self) -> dict[str, Any]:
@@ -263,6 +288,7 @@ class Settings(BaseSettings):
             "secret_key", "db_password", "redis_password",
             "pinecone_api_key", "openai_api_key",
             "azure_document_intelligence_key", "langsmith_api_key",
+            "azure_openai_api_key", "icd_api_client_secret",
         }
         for field in secret_fields:
             if field in data and data[field] is not None:

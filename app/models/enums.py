@@ -89,6 +89,27 @@ class OCRStatus(str, Enum):
 
 
 # ----------------------------------------------------------
+# Policies
+# ----------------------------------------------------------
+
+class PolicyProcessingStatus(str, Enum):
+    """Lifecycle states for a policy ingestion run."""
+    UPLOADED   = "UPLOADED"
+    EXTRACTED  = "EXTRACTED"
+    CHUNKED    = "CHUNKED"
+    EMBEDDED   = "EMBEDDED"
+    STORED     = "STORED"     # Upserted to Pinecone + metadata persisted
+    FAILED     = "FAILED"
+
+
+class PolicyEmbeddingStatus(str, Enum):
+    """Status of Pinecone embeddings for a policy."""
+    NONE     = "NONE"         # Never generated / no vectors
+    STORED   = "STORED"       # Present in Pinecone
+    DELETED  = "DELETED"      # Explicitly deleted from Pinecone
+
+
+# ----------------------------------------------------------
 # Extracted Entities
 # ----------------------------------------------------------
 

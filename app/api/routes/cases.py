@@ -31,7 +31,6 @@ from app.core.exceptions.base import (
     PermissionDeniedError,
 )
 from app.db.repositories.pa_case import PACaseRepository
-from app.monitoring.metrics import METRICS
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -109,8 +108,6 @@ async def get_case(
         )
     except Exception as exc:
         logger.debug("cases.view_audit_failed", case_id=case_id, error=str(exc))
-
-    METRICS.case_views_total.labels(status=str(case.status)).inc()
 
     logger.info(
         "cases.get",
@@ -270,12 +267,6 @@ async def upload_document(
             error=str(exc),
         )
 
-    METRICS.documents_uploaded_total.labels(
-        document_type=str(doc_type),
-        content_type=content_type.split("/")[-1],
-    ).inc()
-    METRICS.document_size_bytes.labels(document_type=str(doc_type)).observe(file_size)
-
     logger.info(
         "cases.document_uploaded",
         case_id=case_id,
@@ -349,8 +340,6 @@ async def download_document(
 
     filename = getattr(doc, "original_filename", f"document-{document_id}.pdf")
     content_type = getattr(doc, "content_type", "application/octet-stream")
-
-    METRICS.document_downloads_total.labels(document_type=str(doc.document_type)).inc()
 
     return StreamingResponse(
         io.BytesIO(file_bytes),

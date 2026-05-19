@@ -4,41 +4,26 @@ import axios, {
   type AxiosError,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import { APP_CONFIG } from '@/config/app.config'
-import { tokenVault  } from '@/lib/tokenVault'
-import type { ApiError } from '@/types'
+import { tokenVault } from '@/lib/tokenVault'
 
-// ─── Request ID ───────────────────────────────────────────────────────────────
-// Each request gets a unique ID for server-side tracing (correlates FE errors
-// with backend logs via the X-Request-ID header).
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
 
 function generateRequestId(): string {
-  const ts  = Date.now().toString(36)
-  const rnd = Math.random().toString(36).slice(2, 7)
-  return `req_${ts}_${rnd}`
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
-
-// ─── Token refresh queue ──────────────────────────────────────────────────────
-// Prevents duplicate refresh calls when multiple 401s arrive simultaneously.
 
 let _isRefreshing = false
-let _refreshQueue: Array<(accessToken: string | null) => void> = []
-
-function enqueueAfterRefresh(cb: (token: string | null) => void) {
-  _refreshQueue.push(cb)
-}
+let _refreshQueue: Array<(token: string | null) => void> = []
 
 function drainQueue(token: string | null) {
   _refreshQueue.forEach((cb) => cb(token))
   _refreshQueue = []
 }
 
-function clearStoredSession() {
+function clearSession() {
   tokenVault.clearTokens()
-  localStorage.removeItem('pa-auth')   // clear persisted Zustand auth state
+  localStorage.removeItem('pa-auth')
 }
-
-// ─── Axios singleton ──────────────────────────────────────────────────────────
 
 let _instance: AxiosInstance | null = null
 
@@ -46,27 +31,18 @@ export function getHttpClient(): AxiosInstance {
   if (_instance) return _instance
 
   _instance = axios.create({
-    baseURL: APP_CONFIG.api.baseUrl,
-    timeout: APP_CONFIG.api.timeout,
-    headers: {
-      'Content-Type':  'application/json',
-      'X-Client':      `pa-ui/${APP_CONFIG.version ?? '0.1.0'}`,
-      'X-Requested-With': 'XMLHttpRequest',  // helps server distinguish AJAX from form posts
-    },
+    baseURL: BASE_URL,
+    timeout: 30_000,
+    headers: { 'Content-Type': 'application/json' },
   })
 
-  // ── Request: attach JWT + tracing headers ─────────────────────────────────
   _instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = tokenVault.getAccessToken()
     if (token) config.headers.Authorization = `Bearer ${token}`
-
-    // Unique ID per request — correlates FE errors with server logs
     config.headers['X-Request-ID'] = generateRequestId()
-
     return config
   })
 
-  // ── Response: handle 401 with silent refresh ──────────────────────────────
   _instance.interceptors.response.use(
     (res) => res,
     async (error: AxiosError) => {
@@ -79,7 +55,7 @@ export function getHttpClient(): AxiosInstance {
         if (refreshToken) {
           if (_isRefreshing) {
             return new Promise((resolve, reject) => {
-              enqueueAfterRefresh((token) => {
+              _refreshQueue.push((token) => {
                 if (token) {
                   originalRequest.headers.Authorization = `Bearer ${token}`
                   resolve(_instance!.request(originalRequest))
@@ -94,57 +70,35 @@ export function getHttpClient(): AxiosInstance {
           _isRefreshing = true
 
           try {
-            const { data } = await axios.post(
-              `${APP_CONFIG.api.baseUrl}/auth/refresh`,
-              { refreshToken },
-              { headers: { 'Content-Type': 'application/json' } },
-            )
-            const newTokens = data.tokens
-            tokenVault.updateAccessToken(newTokens.accessToken, newTokens.expiresAt)
-            if (newTokens.refreshToken) {
-              // Server rotated the refresh token — persist the new one
-              tokenVault.setTokens(newTokens.accessToken, newTokens.expiresAt, newTokens.refreshToken)
-            }
-            drainQueue(newTokens.accessToken)
-            originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`
+            const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken })
+            const { access_token, refresh_token, expires_in } = data
+            const expiresAt = Date.now() + (expires_in ?? 1800) * 1000
+            tokenVault.updateAccessToken(access_token, expiresAt)
+            if (refresh_token) tokenVault.setTokens(access_token, expiresAt, refresh_token)
+            drainQueue(access_token)
+            originalRequest.headers.Authorization = `Bearer ${access_token}`
             return _instance!.request(originalRequest)
           } catch {
             drainQueue(null)
-            clearStoredSession()
-            window.location.href = '/login?reason=session_expired'
+            clearSession()
+            window.location.href = '/login'
             return Promise.reject(error)
           } finally {
             _isRefreshing = false
           }
         } else {
-          clearStoredSession()
-          window.location.href = '/login?reason=session_expired'
+          clearSession()
+          window.location.href = '/login'
         }
       }
 
-      // ── Sanitise error before surfacing to UI ────────────────────────────
-      // Never leak internal server details — map to the ApiError shape only.
-      const apiError: ApiError = {
-        statusCode:  status ?? 0,
-        message:     sanitiseServerMessage(
-                       (error.response?.data as any)?.detail ?? error.message,
-                     ),
-        fieldErrors: (error.response?.data as any)?.errors,
-      }
-      return Promise.reject(apiError)
+      const message = (error.response?.data as any)?.detail ?? error.message ?? 'An unexpected error occurred'
+      return Promise.reject({ statusCode: status ?? 0, message: String(message).slice(0, 500) })
     },
   )
 
   return _instance
 }
-
-// Strip any HTML/script content a backend error message might contain
-function sanitiseServerMessage(raw: unknown): string {
-  if (typeof raw !== 'string') return 'An unexpected error occurred'
-  return raw.replace(/<[^>]*>/g, '').slice(0, 500).trim() || 'An unexpected error occurred'
-}
-
-// ─── Typed helper methods ─────────────────────────────────────────────────────
 
 const http = {
   get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
@@ -164,7 +118,8 @@ const http = {
   },
   upload<T>(url: string, formData: FormData, onProgress?: (pct: number) => void): Promise<T> {
     return getHttpClient().post<T>(url, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Do NOT set Content-Type manually — axios/browser must set it with the correct
+      // multipart boundary. An explicit header without boundary causes 422 on the server.
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
       },

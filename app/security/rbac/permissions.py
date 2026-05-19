@@ -42,7 +42,6 @@ metrics              read            ✓      ✓         ✗
 from __future__ import annotations
 
 from enum import Enum
-from typing import frozenset
 
 
 class Resource(str, Enum):

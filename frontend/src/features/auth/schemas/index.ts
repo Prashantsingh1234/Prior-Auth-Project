@@ -1,1 +1,0 @@
-﻿export { loginSchema, type LoginFormData } from '@/schemas/auth.schema'

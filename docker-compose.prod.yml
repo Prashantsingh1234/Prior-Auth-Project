@@ -52,14 +52,22 @@ services:
         BUILD_DATE: "${BUILD_DATE:-unknown}"
         GIT_SHA: "${GIT_SHA:-unknown}"
     image: pa-review-platform:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
     entrypoint: ["/bin/bash", "/app/docker/entrypoint.sh"]
     environment:
       ENVIRONMENT: production
       DEBUG: "false"
       LOG_FORMAT: json
       SKIP_MIGRATIONS: "false"
-    # Remove dev port exposure — traffic comes only through nginx
-    ports: []
+      DOCS_ENABLED_OVERRIDE: "true"
+      DB_HOST: mysql
+      REDIS_URL: redis://:redispassword@redis:6379/0
+      RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
+    # Optional: expose docs/API directly on localhost:8000 for local troubleshooting.
+    # In real production, keep this empty and access through nginx only.
+    ports:
+      - "8000:8000"
     volumes: []
     restart: always
     deploy:
@@ -87,6 +95,8 @@ services:
       dockerfile: Dockerfile
       target: production
     image: pa-review-platform:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
     entrypoint: ["/bin/bash", "/app/docker/entrypoint.sh"]
     command: ["python", "-m", "app.queues.runner"]
     environment:
@@ -95,6 +105,9 @@ services:
       LOG_FORMAT: json
       WORKER_MODE: "true"
       SKIP_MIGRATIONS: "true"
+      DB_HOST: mysql
+      REDIS_URL: redis://:redispassword@redis:6379/0
+      RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
     volumes: []
     restart: always
     deploy:

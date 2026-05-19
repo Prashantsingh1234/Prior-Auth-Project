@@ -11,7 +11,6 @@
 #   grafana      — Metrics visualization
 # ============================================================
 
-version: "3.9"
 
 networks:
   pa-network:
@@ -69,7 +68,7 @@ services:
       DEBUG: "true"
       LOG_FORMAT: console
       DB_HOST: mysql
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:redispassword@redis:6379/0
       RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
     depends_on:
       mysql:
@@ -172,7 +171,7 @@ services:
       ENVIRONMENT: development
       LOG_FORMAT: console
       DB_HOST: mysql
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:redispassword@redis:6379/0
       RABBITMQ_URL: amqp://pauser:papassword@rabbitmq:5672/
       WORKER_MAX_RETRIES: "3"
       RABBITMQ_PREFETCH_COUNT: "5"
@@ -208,12 +207,14 @@ services:
     volumes:
       - prometheus_data:/prometheus
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/web.yml:/etc/prometheus/web.yml:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=15d"
       - "--web.enable-lifecycle"
       - "--web.enable-admin-api"
+      - "--web.config.file=/etc/prometheus/web.yml"
     depends_on:
       - pa-api
     restart: unless-stopped

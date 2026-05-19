@@ -18,17 +18,14 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt as _bcrypt
 import structlog
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config.settings import get_settings
 from app.core.exceptions.base import TokenExpiredError, TokenInvalidError
 
 logger = structlog.get_logger(__name__)
-
-# bcrypt password hashing context
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ----------------------------------------------------------
@@ -167,9 +164,12 @@ def decode_access_token(token: str) -> TokenPayload:
 
 def hash_password(plain_password: str) -> str:
     """Return bcrypt hash of a plain-text password."""
-    return _pwd_context.hash(plain_password)
+    return _bcrypt.hashpw(plain_password.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain-text password against a stored bcrypt hash."""
-    return _pwd_context.verify(plain_password, hashed_password)
+    try:
+        return _bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except Exception:
+        return False

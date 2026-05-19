@@ -32,7 +32,6 @@ from app.db.base.model import BaseModel
 from app.models.enums import DocumentType, OCRProvider, OCRStatus
 
 if TYPE_CHECKING:
-    from app.models.entity import ExtractedEntity
     from app.models.pa_case import PACase
 
 
@@ -135,12 +134,6 @@ class UploadedDocument(BaseModel):
     # ----------------------------------------------------------
     case: Mapped["PACase"] = relationship(
         "PACase", back_populates="documents", lazy="raise"
-    )
-    entities: Mapped[list["ExtractedEntity"]] = relationship(
-        "ExtractedEntity",
-        back_populates="document",
-        lazy="raise",
-        cascade="all, delete-orphan",
     )
 
     # ----------------------------------------------------------

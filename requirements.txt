@@ -41,7 +41,7 @@ pinecone-client==4.1.0
 # LLM / AI
 langchain==0.2.0
 langchain-openai==0.1.8
-langgraph==0.1.0
+langgraph==0.1.1
 langsmith==0.1.63
 openai==1.30.0
 
