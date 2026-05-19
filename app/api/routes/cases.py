@@ -240,10 +240,11 @@ async def upload_document(
     doc = await doc_repo.create(
         case_id=case_id,
         document_type=doc_type,
-        file_path=storage_path,
+        storage_path=storage_path,
         original_filename=filename,
+        stored_filename=filename,
         file_size_bytes=file_size,
-        content_type=content_type,
+        mime_type=content_type,
         ocr_status=OCRStatus.PENDING,
     )
 
@@ -333,13 +334,13 @@ async def download_document(
     try:
         from app.security.storage.service import SecureStorage
         storage = SecureStorage()
-        file_bytes = await storage.download(doc.file_path)
+        file_bytes = await storage.download(path=doc.storage_path)
     except Exception as exc:
         logger.error("cases.document_download_failed", document_id=document_id, error=str(exc))
         raise HTTPException(status_code=500, detail="Failed to retrieve document")
 
     filename = getattr(doc, "original_filename", f"document-{document_id}.pdf")
-    content_type = getattr(doc, "content_type", "application/octet-stream")
+    content_type = getattr(doc, "mime_type", "application/octet-stream")
 
     return StreamingResponse(
         io.BytesIO(file_bytes),

@@ -452,7 +452,10 @@ async def submit_pa_intake(
                     data=file_bytes,
                     path=storage_path,
                     content_type=content_type,
-                    metadata={"case_id": str(case.id), "uploaded_by": current_user.sub},
+                    metadata={
+                        "case_id": str(case.id),
+                        "uploaded_by": current_user.sub if current_user else "anonymous",
+                    },
                 )
             except Exception as exc:
                 logger.warning("pa_intake.file_storage_failed", case_id=str(case.id),

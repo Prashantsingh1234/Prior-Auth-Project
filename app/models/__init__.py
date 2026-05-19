@@ -25,10 +25,12 @@ from app.models.pa_case import PACase
 from app.models.patient import Patient
 from app.models.policy import PolicyChunk, PolicyDocument
 from app.models.provider import Provider
+from app.models.reviewer_action import ReviewerAction
 
 __all__ = [
     "AuditLog", "Clarification", "Decision", "UploadedDocument",
     "PACase", "Patient", "PolicyChunk", "PolicyDocument", "Provider",
+    "ReviewerAction",
     "ActorType", "AuditAction", "AuditEntityType", "CasePriority",
     "CaseStatus", "ClarificationStatus", "CriterionStatus",
     "DecisionOutcome", "DecisionSource", "DocumentType",

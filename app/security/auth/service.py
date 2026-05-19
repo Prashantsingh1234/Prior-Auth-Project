@@ -79,10 +79,8 @@ class AuthService:
         Raises:
             ValueError: Invalid credentials or locked account
         """
-        user = self._by_username.get(request.username)
-        if user is None:
-            user_id = self._by_email.get(request.username)
-            user = self._users.get(user_id) if user_id else None
+        user_id = self._by_username.get(request.username) or self._by_email.get(request.username)
+        user = self._users.get(user_id) if user_id else None
 
         if user is None:
             # Constant-time failure to prevent username enumeration

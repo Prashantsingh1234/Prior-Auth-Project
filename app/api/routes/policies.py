@@ -56,19 +56,20 @@ async def list_policies(
     current_user: CurrentUser,
     pagination: PaginationDep,
     search: str | None = None,
-    status_filter: str | None = None,
+    status: str | None = None,
     namespace: str | None = None,
 ) -> ORJSONResponse:
-    if status_filter:
+    processing_status: PolicyProcessingStatus | None = None
+    if status:
         try:
-            status_filter = PolicyProcessingStatus(status_filter)
+            processing_status = PolicyProcessingStatus(status)
         except ValueError:
-            raise HTTPException(status_code=422, detail="Invalid status filter")
+            raise HTTPException(status_code=422, detail=f"Invalid status '{status}'. Valid values: {[e.value for e in PolicyProcessingStatus]}")
 
     repo = PolicyRepository(session)
     items, total = await repo.list_policies(
         search=search,
-        status=status_filter,
+        status=processing_status,
         namespace=namespace,
         offset=pagination.offset,
         limit=pagination.limit,

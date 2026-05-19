@@ -33,10 +33,15 @@ export function getHttpClient(): AxiosInstance {
   _instance = axios.create({
     baseURL: BASE_URL,
     timeout: 30_000,
-    headers: { 'Content-Type': 'application/json' },
   })
 
   _instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    // FormData requests must NOT have Content-Type set — the browser sets it
+    // automatically with the correct multipart boundary. An explicit header
+    // without the boundary causes FastAPI to return 422.
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = config.headers['Content-Type'] ?? 'application/json'
+    }
     const token = tokenVault.getAccessToken()
     if (token) config.headers.Authorization = `Bearer ${token}`
     config.headers['X-Request-ID'] = generateRequestId()

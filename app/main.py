@@ -19,6 +19,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import ORJSONResponse
 from starlette.responses import RedirectResponse
 
+import app.models  # noqa: F401 — registers all ORM mappers before any query runs
 from app.api.routes import health
 from app.core.config.settings import get_settings
 from app.core.exceptions.handlers import register_exception_handlers
