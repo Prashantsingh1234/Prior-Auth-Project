@@ -48,12 +48,16 @@ LABEL org.opencontainers.image.ref.name="${GIT_REF}"
 WORKDIR /app
 
 # Install minimal runtime OS deps
-# libgl1-mesa-glx + libglib2.0-0 are required by PaddleOCR (OpenCV)
+# libgl1 + libglib2.0-0 required by PaddleOCR (OpenCV)
+# tesseract-ocr + poppler-utils required for local OCR fallback (pytesseract + pdf2image)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security — never run as root in production

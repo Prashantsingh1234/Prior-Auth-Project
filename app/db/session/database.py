@@ -30,6 +30,26 @@ from sqlalchemy.sql import text
 
 from app.core.config.settings import get_settings
 
+# SQLAlchemy 2.0 + aiomysql 0.2.0 compatibility fix:
+# The pymysql dialect's do_ping calls dbapi_connection.ping() with no arguments,
+# but aiomysql 0.2.0 changed the signature to require ping(reconnect=False).
+def _patch_aiomysql_ping() -> None:
+    try:
+        from sqlalchemy.dialects.mysql.pymysql import MySQLDialect_pymysql
+
+        def _do_ping(self, dbapi_connection):  # type: ignore[override]
+            try:
+                dbapi_connection.ping(reconnect=False)
+                return True
+            except Exception:
+                return False
+
+        MySQLDialect_pymysql.do_ping = _do_ping  # type: ignore[method-assign]
+    except Exception:
+        pass  # patch is best-effort; skip if dialect structure changes
+
+_patch_aiomysql_ping()
+
 logger = structlog.get_logger(__name__)
 
 # Module-level singletons — initialized in init_db_connection()

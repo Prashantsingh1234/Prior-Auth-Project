@@ -19,9 +19,10 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class OCRProvider(str, Enum):
-    AZURE  = "azure"
-    PADDLE = "paddle"
-    NONE   = "none"      # Native text extraction — no OCR needed
+    AZURE     = "azure"
+    PADDLE    = "paddle"
+    TESSERACT = "tesseract"
+    NONE      = "none"      # Native text extraction — no OCR needed
 
 
 class FallbackReason(str, Enum):

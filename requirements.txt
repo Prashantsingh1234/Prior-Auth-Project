@@ -70,3 +70,6 @@ python-dateutil==2.9.0
 pdfplumber==0.11.0
 pypdf==4.2.0
 pytz==2024.1
+pytesseract==0.3.10
+pdf2image==1.17.0
+Pillow==10.3.0

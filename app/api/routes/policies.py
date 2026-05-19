@@ -186,7 +186,11 @@ async def process_policy(
     svc = PolicyIngestionService()
 
     try:
-        # If reprocessing, remove prior vectors first (avoid namespace bloat)
+        # Step 0: clear any previous error and commit immediately so it persists
+        await repo.update(policy_id, last_error=None)
+        await session.commit()
+
+        # Step 1: delete old vectors if reprocessing
         existing_vector_ids = await chunk_repo.get_vector_ids(policy_id)
         if existing_vector_ids:
             try:
@@ -194,23 +198,57 @@ async def process_policy(
                     namespace=policy.pinecone_namespace,
                     ids=existing_vector_ids,
                 )
-            except Exception:
-                # Non-fatal: proceed; new vectors will still upsert with deterministic IDs.
-                logger.warning("policies.delete_existing_vectors_failed", policy_id=policy_id)
+                logger.info(
+                    "policies.old_vectors_deleted",
+                    policy_id=policy_id,
+                    count=len(existing_vector_ids),
+                )
+            except Exception as vec_exc:
+                # Non-fatal: deterministic IDs mean upsert will overwrite them.
+                logger.warning(
+                    "policies.delete_existing_vectors_failed",
+                    policy_id=policy_id,
+                    error=str(vec_exc),
+                )
 
-        await repo.update(policy_id, processing_status=PolicyProcessingStatus.EXTRACTED, last_error=None)
+        # Step 2: OCR / text extraction
+        logger.info("policies.extracting_text", policy_id=policy_id, filename=policy.original_filename)
         extracted_text, warnings = await svc.extract_text(
             policy_document_id=str(policy.id),
             filename=policy.original_filename,
             mime_type=policy.mime_type or "",
             content=content,
         )
-        await repo.update(policy_id, extracted_text=extracted_text, extraction_warnings=warnings)
+        await repo.update(
+            policy_id,
+            processing_status=PolicyProcessingStatus.EXTRACTED,
+            extracted_text=extracted_text,
+            extraction_warnings=warnings,
+        )
+        await session.commit()   # persist EXTRACTED status
+        logger.info(
+            "policies.text_extracted",
+            policy_id=policy_id,
+            text_length=len(extracted_text),
+            warnings=len(warnings),
+        )
 
+        if not extracted_text.strip():
+            await repo.update(
+                policy_id,
+                processing_status=PolicyProcessingStatus.FAILED,
+                last_error="OCR produced no extractable text",
+            )
+            await session.commit()
+            raise HTTPException(status_code=422, detail="OCR produced no extractable text from this document")
+
+        # Step 3: Delete old chunks, set CHUNKED status, commit
         await chunk_repo.hard_delete_for_policy(policy_id)
         await repo.update(policy_id, processing_status=PolicyProcessingStatus.CHUNKED, total_chunks=0)
+        await session.commit()   # persist CHUNKED status
 
         total_chunks, chunk_rows, ingest_warnings = await svc.process_and_index(
+            policy_id=str(policy.id),
             policy_key=policy.policy_key,
             policy_name=policy.policy_name,
             policy_version=policy.policy_version,
@@ -221,15 +259,13 @@ async def process_policy(
         )
         warnings = list(warnings) + list(ingest_warnings)
 
-        # Persist chunks in DB
+        # Step 4: Persist chunks in DB
         if chunk_rows:
             await chunk_repo.bulk_create(
-                [
-                    {"policy_document_id": str(policy.id), **row}
-                    for row in chunk_rows
-                ]
+                [{"policy_document_id": str(policy.id), **row} for row in chunk_rows]
             )
 
+        # Step 5: Mark fully stored and commit
         await repo.update(
             policy_id,
             processing_status=PolicyProcessingStatus.STORED,
@@ -237,6 +273,14 @@ async def process_policy(
             total_chunks=total_chunks,
             last_processed_at=datetime.now(UTC),
             last_error=None,
+        )
+        # Session dependency will commit on return — no explicit commit needed here
+
+        logger.info(
+            "policies.process_complete",
+            policy_id=policy_id,
+            total_chunks=total_chunks,
+            warnings=len(warnings),
         )
 
         data = PolicyProcessResponse(
@@ -246,13 +290,23 @@ async def process_policy(
             warnings=warnings,
         )
         return ORJSONResponse(content=SuccessResponse(data=data).model_dump(mode="json"))
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("policies.process_failed", policy_id=policy_id, error=str(exc))
-        await repo.update(
-            policy_id,
-            processing_status=PolicyProcessingStatus.FAILED,
-            last_error=str(exc)[:2000],
-        )
+        # Explicitly rollback then commit the failure status so it persists.
+        # The session dependency will try to rollback again after we re-raise,
+        # but an empty-transaction rollback is a no-op.
+        try:
+            await session.rollback()
+            await repo.update(
+                policy_id,
+                processing_status=PolicyProcessingStatus.FAILED,
+                last_error=str(exc)[:2000],
+            )
+            await session.commit()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Processing failed: {exc}")
 
 

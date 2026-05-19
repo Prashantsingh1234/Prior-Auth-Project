@@ -37,6 +37,7 @@ def sha256_text(text: str) -> str:
 
 @dataclass(frozen=True)
 class PolicyChunkMetadata:
+    policy_id: str
     policy_name: str
     policy_version: str
     policy_type: str | None
@@ -49,6 +50,7 @@ class PolicyChunkMetadata:
 
     def to_pinecone_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
+            "policy_id": self.policy_id,
             "policy_name": self.policy_name,
             "version": self.policy_version,
             "namespace": self.namespace,

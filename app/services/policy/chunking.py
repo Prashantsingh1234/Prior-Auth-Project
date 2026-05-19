@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass
 
 
-_HEADING_RE = re.compile(r"^(?:[A-Z][A-Z0-9 /&()\\-]{5,}|\\d+(?:\\.\\d+)*\\s+.+)$")
-_BULLET_RE = re.compile(r"^\\s*(?:[-*]|\\d+\\.|\\([a-zA-Z0-9]+\\))\\s+")
+_HEADING_RE = re.compile(r"^(?:[A-Z][A-Z0-9 /&()-]{5,}|\d+(?:\.\d+)*\s+.+)$")
+_BULLET_RE = re.compile(r"^\s*(?:[-*]|\d+\.|\([a-zA-Z0-9]+\))\s+")
 
 
 def _normalize_ws(text: str) -> str:
@@ -140,7 +140,7 @@ class PolicySemanticChunker:
 
     def _split_large(self, text: str) -> list[str]:
         # Prefer splitting on blank lines/sentence boundaries while keeping length bounded.
-        sentences = re.split(r"(?<=[.!?])\\s+(?=[A-Z0-9(])", text)
+        sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9(])", text)
         out: list[str] = []
         cur: list[str] = []
         cur_len = 0

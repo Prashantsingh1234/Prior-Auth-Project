@@ -140,6 +140,22 @@ class DocumentNormalizer:
         pages = await asyncio.to_thread(self._extract_native_pdf_sync, content)
         full_text = "\n\n".join(p.text for p in pages if p.text.strip())
 
+        # pdfplumber returned nothing — try pypdf (handles more PDF flavors)
+        if not full_text.strip():
+            try:
+                pypdf_pages = await self._extract_pypdf(content)
+                pypdf_text = "\n\n".join(p.text for p in pypdf_pages if p.text.strip())
+                if pypdf_text.strip():
+                    self._log.info("normalizer.pypdf_fallback_used", document_id=document_id)
+                    pages = pypdf_pages
+                    full_text = pypdf_text
+            except Exception as pypdf_err:
+                self._log.warning(
+                    "normalizer.pypdf_fallback_failed",
+                    document_id=document_id,
+                    error=str(pypdf_err),
+                )
+
         return NormalizedDocument(
             document_id=document_id,
             document_type=DocumentType.NATIVE_PDF,
@@ -199,47 +215,231 @@ class DocumentNormalizer:
         mime_type: str,
         category: DocumentCategory,
     ) -> NormalizedDocument:
-        ocr_result: OCRResult = await self._ocr.process(
-            content=content,
-            mime_type=mime_type or self._infer_mime(doc_type),
-            document_hash=doc_hash,
-        )
+        ocr_warnings: list[str] = []
+        ocr_result: OCRResult | None = None
 
-        pages = [
-            NormalizedPage(
-                page_number=p.page_number,
-                text=p.text,
-                confidence=p.confidence,
-                ocr_provider=p.provider,
-                tables=p.tables,
-                key_values=p.key_values,
-                used_fallback=p.used_fallback,
+        try:
+            ocr_result = await self._ocr.process(
+                content=content,
+                mime_type=mime_type or self._infer_mime(doc_type),
+                document_hash=doc_hash,
             )
-            for p in ocr_result.pages
-        ]
+        except Exception as ocr_err:
+            self._log.warning(
+                "normalizer.ocr_failed_using_pdfplumber_fallback",
+                document_id=document_id,
+                error=str(ocr_err),
+            )
+            ocr_warnings.append(f"OCR unavailable ({ocr_err}); using direct text extraction fallback")
 
-        method = self._ocr_method(ocr_result)
+        # If OCR produced a result, check if the text is non-empty
+        if ocr_result is not None and ocr_result.full_text.strip():
+            pages = [
+                NormalizedPage(
+                    page_number=p.page_number,
+                    text=p.text,
+                    confidence=p.confidence,
+                    ocr_provider=p.provider,
+                    tables=p.tables,
+                    key_values=p.key_values,
+                    used_fallback=p.used_fallback,
+                )
+                for p in ocr_result.pages
+            ]
+            return NormalizedDocument(
+                document_id=document_id,
+                document_type=doc_type,
+                document_category=category,
+                normalization_method=self._ocr_method(ocr_result),
+                full_text=ocr_result.full_text,
+                pages=pages,
+                all_tables=ocr_result.all_tables,
+                all_key_values=ocr_result.all_key_values,
+                overall_confidence=ocr_result.overall_confidence,
+                total_pages=ocr_result.total_pages,
+                document_hash=doc_hash,
+                ocr_used=True,
+                fallback_triggered=ocr_result.fallback_triggered,
+                fallback_pages=ocr_result.fallback_pages,
+                filename=filename,
+                mime_type=mime_type,
+                file_size_bytes=len(content),
+                warnings=list(ocr_result.warnings) + ocr_warnings,
+            )
 
-        return NormalizedDocument(
-            document_id=document_id,
-            document_type=doc_type,
-            document_category=category,
-            normalization_method=method,
-            full_text=ocr_result.full_text,
-            pages=pages,
-            all_tables=ocr_result.all_tables,
-            all_key_values=ocr_result.all_key_values,
-            overall_confidence=ocr_result.overall_confidence,
-            total_pages=ocr_result.total_pages,
-            document_hash=doc_hash,
-            ocr_used=True,
-            fallback_triggered=ocr_result.fallback_triggered,
-            fallback_pages=ocr_result.fallback_pages,
-            filename=filename,
-            mime_type=mime_type,
-            file_size_bytes=len(content),
-            warnings=ocr_result.warnings,
+        # OCR failed or returned empty — try direct PDF text extraction as fallback
+        if "pdf" in (mime_type or "").lower() or doc_type in (
+            DocumentType.NATIVE_PDF, DocumentType.SCANNED_PDF
+        ):
+            try:
+                self._log.info(
+                    "normalizer.pdf_fallback_extraction",
+                    document_id=document_id,
+                )
+                doc = await self._normalize_native_pdf(
+                    content, document_id, doc_hash, filename, mime_type or "application/pdf", category
+                )
+                if doc.full_text.strip():
+                    doc.warnings.extend(ocr_warnings)
+                    doc.warnings.append("OCR unavailable; text extracted directly from PDF")
+                    return doc
+            except Exception as pdf_err:
+                self._log.warning(
+                    "normalizer.pdf_fallback_failed",
+                    document_id=document_id,
+                    error=str(pdf_err),
+                )
+                ocr_warnings.append(f"PDF direct extraction also failed: {pdf_err}")
+
+            # Second direct-extraction attempt: pypdf
+            try:
+                pypdf_pages = await self._extract_pypdf(content)
+                if pypdf_pages:
+                    pypdf_text = "\n\n".join(p.text for p in pypdf_pages if p.text.strip())
+                    if pypdf_text.strip():
+                        ocr_warnings.append("OCR unavailable; text extracted via pypdf")
+                        return NormalizedDocument(
+                            document_id=document_id,
+                            document_type=doc_type,
+                            document_category=category,
+                            normalization_method=NormalizationMethod.NATIVE_TEXT,
+                            full_text=pypdf_text,
+                            pages=pypdf_pages,
+                            overall_confidence=0.85,
+                            total_pages=len(pypdf_pages),
+                            document_hash=doc_hash,
+                            ocr_used=False,
+                            filename=filename,
+                            mime_type=mime_type or "application/pdf",
+                            file_size_bytes=len(content),
+                            warnings=ocr_warnings,
+                        )
+            except Exception as pypdf_err:
+                self._log.warning(
+                    "normalizer.pypdf_fallback_failed",
+                    document_id=document_id,
+                    error=str(pypdf_err),
+                )
+                ocr_warnings.append(f"pypdf extraction also failed: {pypdf_err}")
+
+            # Last resort: PyMuPDF (fitz)
+            try:
+                pages = await self._extract_pymupdf(content)
+                if pages:
+                    full_text = "\n\n".join(p.text for p in pages if p.text.strip())
+                    if full_text.strip():
+                        ocr_warnings.append("OCR unavailable; text extracted via PyMuPDF")
+                        return NormalizedDocument(
+                            document_id=document_id,
+                            document_type=doc_type,
+                            document_category=category,
+                            normalization_method=NormalizationMethod.NATIVE_TEXT,
+                            full_text=full_text,
+                            pages=pages,
+                            overall_confidence=0.9,
+                            total_pages=len(pages),
+                            document_hash=doc_hash,
+                            ocr_used=False,
+                            filename=filename,
+                            mime_type=mime_type or "application/pdf",
+                            file_size_bytes=len(content),
+                            warnings=ocr_warnings,
+                        )
+            except Exception as fitz_err:
+                self._log.warning(
+                    "normalizer.pymupdf_fallback_failed",
+                    document_id=document_id,
+                    error=str(fitz_err),
+                )
+                ocr_warnings.append(f"PyMuPDF extraction also failed: {fitz_err}")
+
+        # All methods exhausted — return empty document with warnings rather than raising
+        if ocr_result is not None:
+            # Return the (empty) OCR result so the pipeline doesn't crash
+            pages = [
+                NormalizedPage(
+                    page_number=p.page_number,
+                    text=p.text,
+                    confidence=p.confidence,
+                    ocr_provider=p.provider,
+                )
+                for p in ocr_result.pages
+            ]
+            return NormalizedDocument(
+                document_id=document_id,
+                document_type=doc_type,
+                document_category=category,
+                normalization_method=self._ocr_method(ocr_result),
+                full_text=ocr_result.full_text,
+                pages=pages,
+                overall_confidence=ocr_result.overall_confidence,
+                total_pages=ocr_result.total_pages,
+                document_hash=doc_hash,
+                ocr_used=True,
+                filename=filename,
+                mime_type=mime_type,
+                file_size_bytes=len(content),
+                warnings=list(ocr_result.warnings) + ocr_warnings,
+            )
+
+        # No OCR result at all — propagate original error so pipeline records it
+        raise RuntimeError(
+            "OCR failed and no text-extraction fallback succeeded. "
+            f"Warnings: {'; '.join(ocr_warnings)}"
         )
+
+    async def _extract_pymupdf(self, content: bytes) -> list[NormalizedPage]:
+        """Extract text with PyMuPDF — handles PDFs that pdfplumber struggles with."""
+        import asyncio
+        return await asyncio.to_thread(self._extract_pymupdf_sync, content)
+
+    @staticmethod
+    def _extract_pymupdf_sync(content: bytes) -> list[NormalizedPage]:
+        try:
+            import fitz  # type: ignore[import-untyped]  # PyMuPDF (pymupdf package)
+        except ImportError as exc:
+            raise RuntimeError("PyMuPDF not installed") from exc
+
+        pages: list[NormalizedPage] = []
+        with fitz.open(stream=content, filetype="pdf") as doc:  # type: ignore[attr-defined]
+            for i, page in enumerate(doc, start=1):
+                text = page.get_text("text") or ""
+                pages.append(
+                    NormalizedPage(
+                        page_number=i,
+                        text=text,
+                        confidence=0.9,
+                        ocr_provider=OCRProvider.NONE,
+                    )
+                )
+        return pages
+
+    async def _extract_pypdf(self, content: bytes) -> list[NormalizedPage]:
+        """Extract text with pypdf — pure-Python, handles PDF flavors pdfplumber misses."""
+        import asyncio
+        return await asyncio.to_thread(self._extract_pypdf_sync, content)
+
+    @staticmethod
+    def _extract_pypdf_sync(content: bytes) -> list[NormalizedPage]:
+        try:
+            from pypdf import PdfReader  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise RuntimeError("pypdf not installed") from exc
+        import io
+
+        reader = PdfReader(io.BytesIO(content))
+        pages: list[NormalizedPage] = []
+        for i, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            pages.append(
+                NormalizedPage(
+                    page_number=i,
+                    text=text,
+                    confidence=0.85 if text.strip() else 0.0,
+                    ocr_provider=OCRProvider.NONE,
+                )
+            )
+        return pages
 
     # ------------------------------------------------------------------
     # JSON

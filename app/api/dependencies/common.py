@@ -166,8 +166,8 @@ class PaginationParams:
     ) -> None:
         if page < 1:
             raise HTTPException(status_code=400, detail="page must be >= 1")
-        if not 1 <= page_size <= 100:
-            raise HTTPException(status_code=400, detail="page_size must be between 1 and 100")
+        if not 1 <= page_size <= 500:
+            raise HTTPException(status_code=400, detail="page_size must be between 1 and 500")
         self.page = page
         self.page_size = page_size
 

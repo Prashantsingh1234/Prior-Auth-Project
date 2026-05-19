@@ -41,6 +41,7 @@ from app.services.ocr.base import (
 )
 from app.services.ocr.azure_provider import AzureOCRProvider
 from app.services.ocr.paddle_provider import PaddleOCRProvider
+from app.services.ocr.tesseract_provider import TesseractOCRProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -70,17 +71,19 @@ class OCROrchestrator:
         self,
         primary: BaseOCRProvider,
         fallback: BaseOCRProvider,
+        second_fallback: BaseOCRProvider | None = None,
         low_confidence_threshold: float = _OVERALL_CONFIDENCE_THRESHOLD,
         page_confidence_threshold: float = _PAGE_CONFIDENCE_THRESHOLD,
         page_fallback_ratio: float = _PAGE_FALLBACK_RATIO,
         min_chars_per_page: int = _MIN_CHARS_PER_PAGE,
     ) -> None:
-        self._primary   = primary
-        self._fallback  = fallback
-        self._low_conf  = low_confidence_threshold
-        self._page_conf = page_confidence_threshold
-        self._page_ratio = page_fallback_ratio
-        self._min_chars  = min_chars_per_page
+        self._primary         = primary
+        self._fallback        = fallback
+        self._second_fallback = second_fallback
+        self._low_conf        = low_confidence_threshold
+        self._page_conf       = page_confidence_threshold
+        self._page_ratio      = page_fallback_ratio
+        self._min_chars       = min_chars_per_page
         self._log = structlog.get_logger(self.__class__.__name__)
 
     # ------------------------------------------------------------------
@@ -147,29 +150,55 @@ class OCROrchestrator:
             fallback_result = await self._fallback.extract(content, mime_type, page_count)
             self._emit_metrics(fallback_result, "fallback")
         except OCRProviderError as fallback_err:
-            self._log.error(
-                "ocr_orchestrator.fallback_also_failed",
+            self._log.warning(
+                "ocr_orchestrator.fallback_failed",
+                provider=fallback_err.provider,
                 error=str(fallback_err),
             )
             self._emit_failure_metric(self._fallback.provider_name, fallback_err.reason)
 
-            if primary_result is not None:
-                # Return degraded primary result with warning
-                primary_result.warnings.append(
-                    f"Fallback OCR also failed ({fallback_err.reason}); "
-                    "using primary result despite low confidence"
-                )
-                primary_result.fallback_triggered = True
-                primary_result.fallback_reason = fallback_reason
-                primary_result.document_hash = document_hash
-                return primary_result
+            # Try second fallback (Tesseract) if configured
+            if self._second_fallback is not None:
+                self._log.info("ocr_orchestrator.second_fallback_triggered")
+                try:
+                    fallback_result = await self._second_fallback.extract(content, mime_type, page_count)
+                    self._emit_metrics(fallback_result, "second_fallback")
+                except OCRProviderError as second_err:
+                    self._log.error(
+                        "ocr_orchestrator.all_providers_failed",
+                        error=str(second_err),
+                    )
+                    if primary_result is not None:
+                        primary_result.warnings.append(
+                            f"All OCR fallbacks failed; using primary result despite low confidence"
+                        )
+                        primary_result.fallback_triggered = True
+                        primary_result.fallback_reason = fallback_reason
+                        primary_result.document_hash = document_hash
+                        return primary_result
+                    raise OCRProviderError(
+                        OCRProvider.PADDLE,
+                        FallbackReason.CORRUPTED_OUTPUT,
+                        "All OCR providers (Azure, PaddleOCR, Tesseract) failed",
+                        second_err,
+                    ) from second_err
+            else:
+                if primary_result is not None:
+                    primary_result.warnings.append(
+                        f"Fallback OCR also failed ({fallback_err.reason}); "
+                        "using primary result despite low confidence"
+                    )
+                    primary_result.fallback_triggered = True
+                    primary_result.fallback_reason = fallback_reason
+                    primary_result.document_hash = document_hash
+                    return primary_result
 
-            raise OCRProviderError(
-                OCRProvider.PADDLE,
-                FallbackReason.CORRUPTED_OUTPUT,
-                "Both primary and fallback OCR providers failed",
-                fallback_err,
-            ) from fallback_err
+                raise OCRProviderError(
+                    OCRProvider.PADDLE,
+                    FallbackReason.CORRUPTED_OUTPUT,
+                    "Both primary and fallback OCR providers failed",
+                    fallback_err,
+                ) from fallback_err
 
         # --- Step 4: Merge results ---
         if primary_result is not None:
@@ -372,10 +401,12 @@ class OCROrchestrator:
         from app.core.config.settings import get_settings
 
         s = get_settings()
-        primary  = AzureOCRProvider.from_settings()
-        fallback = PaddleOCRProvider()
+        primary         = AzureOCRProvider.from_settings()
+        fallback        = PaddleOCRProvider()
+        second_fallback = TesseractOCRProvider()
         return cls(
             primary=primary,
             fallback=fallback,
+            second_fallback=second_fallback,
             low_confidence_threshold=s.azure_ocr_confidence_threshold,
         )

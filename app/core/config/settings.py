@@ -125,7 +125,29 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = Field(default="2024-02-01")
     azure_openai_embedding_deployment: str | None = Field(
         default=None,
-        description="Azure OpenAI embedding deployment name (e.g. text-embedding-3-small)",
+        description="Azure OpenAI embedding deployment name (e.g. text-embedding-3-large)",
+    )
+
+    # ----------------------------------------------------------
+    # Azure OpenAI Embedding — dedicated embedding resource
+    # When set, these override the main azure_openai_* credentials
+    # for all embedding calls so chat and embedding can use separate resources.
+    # ----------------------------------------------------------
+    azure_embedding_api_key: SecretStr | None = Field(
+        default=None,
+        description="API key for the dedicated Azure OpenAI embedding resource",
+    )
+    azure_embedding_endpoint: str | None = Field(
+        default=None,
+        description="Endpoint for the dedicated Azure OpenAI embedding resource",
+    )
+    azure_embedding_model: str = Field(
+        default="text-embedding-3-large",
+        description="Embedding model name — must match the deployed model",
+    )
+    azure_embedding_api_version: str = Field(
+        default="2024-12-01-preview",
+        description="API version for the embedding resource",
     )
 
     # ----------------------------------------------------------
@@ -289,6 +311,7 @@ class Settings(BaseSettings):
             "pinecone_api_key", "openai_api_key",
             "azure_document_intelligence_key", "langsmith_api_key",
             "azure_openai_api_key", "icd_api_client_secret",
+            "azure_embedding_api_key",
         }
         for field in secret_fields:
             if field in data and data[field] is not None:
